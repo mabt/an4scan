@@ -17,6 +17,7 @@ import time
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field, asdict
+from math import log2
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
@@ -196,11 +197,6 @@ SIGNATURES = [
      r"""file_get_contents\s*\(\s*['"]https?://[\s\S]{0,200}(?:eval|base64_decode|file_put_contents)""",
      [".php", ".phtml"]),
 
-    ("FO-004", MEDIUM, "file_operation",
-     "curl_exec to external URL in non-standard location",
-     r"""curl_exec\s*\(""",
-     [".php", ".phtml"]),
-
     # ━━━ Magento-Specific Malware Patterns ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     ("MG-001", CRITICAL, "magento",
      "Modified Magento core payment model (core file tampering)",
@@ -264,17 +260,17 @@ SIGNATURES = [
      [".php", ".phtml"]),
 
     # ━━━ Suspicious Functions & Patterns ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    ("SF-001", MEDIUM, "suspicious",
+    ("SF-001", INFO, "suspicious",
      "eval() usage (review for legitimacy)",
      r"""\beval\s*\(""",
      [".php", ".phtml"]),
 
-    ("SF-002", LOW, "suspicious",
+    ("SF-002", INFO, "suspicious",
      "base64_decode usage (review context)",
      r"""\bbase64_decode\s*\(""",
      [".php", ".phtml"]),
 
-    ("SF-003", MEDIUM, "suspicious",
+    ("SF-003", INFO, "suspicious",
      "System command execution functions",
      r"""\b(?:system|exec|passthru|shell_exec|popen|proc_open|pcntl_exec)\s*\(""",
      [".php", ".phtml"]),
@@ -380,87 +376,9 @@ SUSPICIOUS_FILENAMES = [
 
 # ─── YARA rules (built-in, used when yara-python is available) ────────────────
 YARA_RULES_SOURCE = r"""
-rule magento_skimmer_generic {
-    meta:
-        description = "Generic Magento credit card skimmer"
-        severity = "CRITICAL"
-        category = "skimmer"
-    strings:
-        $s1 = "onestepcheckout" nocase
-        $s2 = "payment" nocase
-        $s3 = /send(Beacon|Request)?/ nocase
-        $exfil1 = /https?:\/\/[^\s'"]{10,}/ nocase
-        $cc1 = "card" nocase
-        $cc2 = "cvv" nocase
-        $cc3 = "expir" nocase
-    condition:
-        ($s1 or $s2) and ($s3 or $exfil1) and any of ($cc*)
-}
-
-rule php_webshell_generic {
-    meta:
-        description = "Generic PHP webshell/backdoor"
-        severity = "CRITICAL"
-        category = "backdoor"
-    strings:
-        $eval = "eval(" nocase
-        $assert = "assert(" nocase
-        $b64 = "base64_decode(" nocase
-        $gz = "gzinflate(" nocase
-        $gz2 = "gzuncompress(" nocase
-        $rot = "str_rot13(" nocase
-        $shell1 = "system(" nocase
-        $shell2 = "passthru(" nocase
-        $shell3 = "shell_exec(" nocase
-        $shell4 = "popen(" nocase
-        $input1 = "$_GET" nocase
-        $input2 = "$_POST" nocase
-        $input3 = "$_REQUEST" nocase
-        $input4 = "$_COOKIE" nocase
-    condition:
-        ($eval or $assert) and ($b64 or $gz or $gz2 or $rot) and any of ($input*) or
-        any of ($shell*) and any of ($input*)
-}
-
-rule php_backdoor_obfuscated {
-    meta:
-        description = "Obfuscated PHP backdoor using string manipulation"
-        severity = "HIGH"
-        category = "backdoor"
-    strings:
-        $chr_chain = /chr\(\d+\)\.chr\(\d+\)\.chr\(\d+\)\.chr\(\d+\)/
-        $hex_chain = /\\x[0-9a-fA-F]{2}\\x[0-9a-fA-F]{2}\\x[0-9a-fA-F]{2}\\x[0-9a-fA-F]{2}/
-        $var_func = /\$[a-zA-Z_]+\s*=\s*['"]\w+['"];\s*\$[a-zA-Z_]+\(/
-        $preg_e = /preg_replace\s*\(\s*['"]\/.*\/e['"]/
-        $create_func = "create_function" nocase
-    condition:
-        any of them
-}
-
-rule magento_malware_known {
-    meta:
-        description = "Known Magento malware families"
-        severity = "CRITICAL"
-        category = "magento"
-    strings:
-        $wso = "WSO " ascii
-        $c99 = "c99shell" ascii nocase
-        $r57 = "r57shell" ascii nocase
-        $b374k = "b374k" ascii nocase
-        $filesman = "FilesMan" ascii
-        $magecart1 = "ccDecode" ascii
-        $magecart2 = "ccGet" ascii
-        $magecart3 = "skimData" ascii
-        $magecart4 = "exfilData" ascii
-        $magecart5 = "grabCC" ascii
-        $magecart6 = "sniffCC" ascii
-    condition:
-        any of them
-}
-
 rule php_in_image {
     meta:
-        description = "PHP code hidden inside image file"
+        description = "PHP code hidden inside image file (binary header check)"
         severity = "HIGH"
         category = "suspicious"
     strings:
@@ -474,37 +392,42 @@ rule php_in_image {
         ($jpg at 0 or $png at 0 or $gif at 0) and any of ($php*)
 }
 
-rule suspicious_js_obfuscation {
+rule elf_in_webdir {
     meta:
-        description = "Heavily obfuscated JavaScript (potential skimmer)"
-        severity = "MEDIUM"
+        description = "ELF binary hidden in web directory (cryptominer, rootkit)"
+        severity = "CRITICAL"
+        category = "backdoor"
+    strings:
+        $elf = { 7F 45 4C 46 }
+    condition:
+        $elf at 0 and filesize < 10MB
+}
+
+rule php_obfuscated_concat_chain {
+    meta:
+        description = "Heavily obfuscated PHP via long chr()/ord() concatenation chains"
+        severity = "HIGH"
         category = "obfuscation"
     strings:
-        $fromchar = /String\.fromCharCode\(\d+,\d+,\d+,\d+,\d+/ nocase
-        $atob_long = /atob\(['"][A-Za-z0-9+\/=]{100,}['"]\)/ nocase
-        $unescape = /unescape\(['"](%[0-9a-fA-F]{2}){20,}['"]\)/ nocase
-        $array_map = /\[(\d+,){20,}\d+\].*map.*String\.fromCharCode/ nocase
+        $chr_long = /(\$\w+=chr\(\d+\)\.){8,}/
+        $ord_long = /(chr\(\d+\)\.){15,}/
+        $hex_dense = /(\\x[0-9a-fA-F]{2}){20,}/
     condition:
         any of them
 }
 
-rule magento_config_theft {
+rule hidden_php_extension {
     meta:
-        description = "Code designed to steal Magento configuration/credentials"
-        severity = "CRITICAL"
-        category = "credential_theft"
+        description = "PHP file disguised with double extension"
+        severity = "HIGH"
+        category = "suspicious"
     strings:
-        $env = "app/etc/env.php" ascii
-        $config = "app/etc/config.php" ascii
-        $read1 = "file_get_contents" ascii
-        $read2 = "fopen" ascii
-        $read3 = "include" ascii
-        $exfil1 = "curl" ascii
-        $exfil2 = "file_get_contents(\"http" ascii
-        $exfil3 = "mail(" ascii
-        $exfil4 = "fwrite" ascii
+        $php = "<?php" nocase
     condition:
-        ($env or $config) and any of ($read*) and any of ($exfil*)
+        $php and (
+            filename matches /\.php\.(jpg|png|gif|ico|txt|bak|old)$/i or
+            filename matches /\.(jpg|png|gif|ico)\.php$/i
+        )
 }
 """
 
@@ -752,30 +675,29 @@ class DatabaseScanner:
         try:
             content = env_path.read_text()
             config = {}
-            # Extract DB connection info from PHP array
-            # Match 'key' => 'value' patterns
+
+            # Find the default DB connection block (handles nested arrays)
             db_section = re.search(
-                r"'connection'\s*=>\s*\[\s*'default'\s*=>\s*\[([\s\S]*?)\]",
+                r"'connection'\s*=>\s*\[\s*'default'\s*=>\s*\[([\s\S]*?)\]\s*\]",
                 content
             )
             if not db_section:
-                # Try alternative format
                 db_section = re.search(
                     r"'db'\s*=>\s*\[\s*[\s\S]*?'connection'\s*=>\s*\[\s*'default'\s*=>\s*\[([\s\S]*?)\]",
                     content
                 )
             if db_section:
                 section = db_section.group(1)
-                for key in ["host", "dbname", "username", "password", "port"]:
+                for key in ["host", "dbname", "username", "password", "port", "unix_socket"]:
                     match = re.search(rf"'{key}'\s*=>\s*'([^']*)'", section)
                     if match:
                         config[key] = match.group(1)
 
-            # Also try to get table prefix
+            # Table prefix (can be outside the db section)
             prefix_match = re.search(r"'table_prefix'\s*=>\s*'([^']*)'", content)
             config["table_prefix"] = prefix_match.group(1) if prefix_match else ""
 
-            if "host" in config and "dbname" in config:
+            if "dbname" in config and ("host" in config or "unix_socket" in config):
                 return config
             return None
         except Exception:
@@ -799,14 +721,18 @@ class DatabaseScanner:
     def _run_query(self, query: str) -> Optional[str]:
         """Execute a MySQL query via CLI and return output."""
         cfg = self.db_config
-        host = cfg.get("host", "localhost")
-        port = cfg.get("port", "3306")
         user = cfg.get("username", "")
         password = cfg.get("password", "")
         dbname = cfg.get("dbname", "")
+        socket = cfg.get("unix_socket")
 
-        cmd = ["mysql", "--batch", "--raw", "-N",
-               f"-h{host}", f"-P{port}", f"-u{user}", f"-D{dbname}"]
+        cmd = ["mysql", "--batch", "--raw", "-N", f"-u{user}", f"-D{dbname}"]
+        if socket:
+            cmd.append(f"--socket={socket}")
+        else:
+            host = cfg.get("host", "localhost")
+            port = cfg.get("port", "3306")
+            cmd.extend([f"-h{host}", f"-P{port}"])
         if password:
             cmd.append(f"-p{password}")
 
@@ -1107,8 +1033,24 @@ class MtimeChecker:
                 return ref.stat().st_mtime
         return None
 
-    def check(self) -> list[Finding]:
+    def check(self, check_integrity: bool = False) -> list[Finding]:
         findings = []
+
+        # Check for core overrides in app/code/Magento (integrity check)
+        if check_integrity:
+            app_code_magento = self.root / "app" / "code" / "Magento"
+            if app_code_magento.exists():
+                for fpath in app_code_magento.rglob("*"):
+                    if fpath.is_file():
+                        findings.append(Finding(
+                            file_path=str(fpath.relative_to(self.root)),
+                            signature_id="INTEG-001",
+                            severity=MEDIUM,
+                            category="integrity",
+                            description="Core override in app/code/Magento - verify legitimacy",
+                            line_number=0,
+                            line_content="",
+                        ))
 
         if self.reference_time is None:
             if self.verbose:
@@ -1794,8 +1736,10 @@ class TimelineBuilder:
 class An4Scanner:
     def __init__(self, path: str, workers: int = 4, min_severity: str = LOW,
                  whitelist: Optional[list] = None, json_output: bool = False,
-                 verbose: bool = False, scan_db: bool = False,
-                 check_mtime: bool = False, mtime_days: int = 7,
+                 verbose: bool = False, quiet: bool = False,
+                 scan_db: bool = False,
+                 check_mtime: bool = False, check_integrity: bool = False,
+                 mtime_days: int = 7,
                  check_permissions: bool = False,
                  use_yara: bool = False, yara_rules: Optional[str] = None,
                  check_version: bool = False, analyze_logs: bool = False,
@@ -1806,8 +1750,10 @@ class An4Scanner:
         self.whitelist = whitelist or []
         self.json_output = json_output
         self.verbose = verbose
+        self.quiet = quiet
         self.scan_db = scan_db
         self.check_mtime = check_mtime
+        self.check_integrity = check_integrity
         self.mtime_days = mtime_days
         self.check_permissions = check_permissions
         self.use_yara = use_yara
@@ -1815,6 +1761,7 @@ class An4Scanner:
         self.check_version = check_version
         self.analyze_logs = analyze_logs
         self.log_paths = log_paths
+        self._show_progress = not json_output and not quiet
         self.compiled_sigs = self._compile_signatures()
         self.compiled_filenames = self._compile_filename_patterns()
 
@@ -2002,7 +1949,6 @@ class An4Scanner:
     def _shannon_entropy(data: str) -> float:
         if not data:
             return 0.0
-        from math import log2
         freq = defaultdict(int)
         for c in data:
             freq[c] += 1
@@ -2021,7 +1967,7 @@ class An4Scanner:
             start_time=datetime.now().isoformat(),
         )
 
-        if not self.json_output:
+        if self._show_progress:
             self._print_banner()
             print(f"  Scanning: {self.path}")
             print(f"  Workers:  {self.workers}")
@@ -2047,7 +1993,7 @@ class An4Scanner:
         files = self._collect_files()
         total_files = len(files)
 
-        if not self.json_output:
+        if self._show_progress:
             print(f"  Found {total_files} files to scan...")
             print()
 
@@ -2071,68 +2017,69 @@ class An4Scanner:
                     if self.verbose:
                         print(f"  Error scanning {filepath}: {e}", file=sys.stderr)
 
-                if not self.json_output and scanned % 500 == 0:
+                if self._show_progress and scanned % 500 == 0:
                     print(f"  Progress: {scanned}/{total_files} files scanned, "
                           f"{len(all_findings)} findings so far...",
                           end="\r")
 
-        if not self.json_output:
+        if self._show_progress:
             print(f"  Progress: {total_files}/{total_files} files scanned.        ")
             print()
 
         # ── Database scan ──
         if self.scan_db:
-            if not self.json_output:
+            if self._show_progress:
                 print("  Scanning database...")
             db_scanner = DatabaseScanner(self.path, verbose=self.verbose)
             result.db_findings = db_scanner.scan()
-            if not self.json_output:
+            if self._show_progress:
                 print(f"  Database: {len(result.db_findings)} finding(s)")
                 print()
 
         # ── Permission check ──
         if self.check_permissions:
-            if not self.json_output:
+            if self._show_progress:
                 print("  Checking file permissions...")
             perm_checker = PermissionChecker(self.path, verbose=self.verbose)
             result.permission_findings = perm_checker.check()
-            if not self.json_output:
+            if self._show_progress:
                 print(f"  Permissions: {len(result.permission_findings)} finding(s)")
                 print()
 
         # ── Modified files check ──
         if self.check_mtime:
-            if not self.json_output:
+            if self._show_progress:
                 print(f"  Checking recently modified files ({self.mtime_days} days)...")
             mtime_checker = MtimeChecker(self.path, days=self.mtime_days,
                                          verbose=self.verbose)
-            result.mtime_findings = mtime_checker.check()
-            if not self.json_output:
+            result.mtime_findings = mtime_checker.check(check_integrity=self.check_integrity)
+            if self._show_progress:
                 print(f"  Modified: {len(result.mtime_findings)} finding(s)")
                 print()
 
         # ── YARA scan ──
         if self.use_yara:
-            if not self.json_output:
+            if self._show_progress:
                 print("  Running YARA scan...")
             yara_scanner = YaraScanner(self.path, extra_rules_path=self.yara_rules,
                                        verbose=self.verbose)
             if yara_scanner.available:
                 result.yara_findings = yara_scanner.scan_directory(files)
-                if not self.json_output:
+                if self._show_progress:
                     print(f"  YARA: {len(result.yara_findings)} finding(s)")
-            elif not self.json_output:
+            elif self._show_progress:
                 print("  YARA: skipped (yara-python not installed)")
-            print()
+            if self._show_progress:
+                print()
 
         # ── Version detection + CVE check ──
         if self.check_version:
-            if not self.json_output:
+            if self._show_progress:
                 print("  Detecting Magento version...")
             detector = VersionDetector(self.path, verbose=self.verbose)
             result.version_info = detector.detect_version()
             version = result.version_info.get("version")
-            if not self.json_output:
+            if self._show_progress:
                 if version:
                     edition = result.version_info.get("edition", "Unknown")
                     print(f"  Version: {version} ({edition})")
@@ -2143,42 +2090,44 @@ class An4Scanner:
                     print("  Version: could not detect")
             if version:
                 result.cve_findings = detector.check_cves(version)
-                if not self.json_output:
+                if self._show_progress:
                     crit_cves = sum(1 for f in result.cve_findings if f.severity == CRITICAL)
                     print(f"  CVEs: {len(result.cve_findings)} known vulnerabilities"
                           f" ({crit_cves} critical)")
-            print()
+            if self._show_progress:
+                print()
 
         # ── Log analysis ──
         if self.analyze_logs:
-            if not self.json_output:
+            if self._show_progress:
                 print("  Analyzing access logs...")
             log_analyzer = LogAnalyzer(self.path, log_paths=self.log_paths,
                                        verbose=self.verbose)
-            if not self.json_output and log_analyzer.log_paths:
+            if self._show_progress and log_analyzer.log_paths:
                 print(f"  Found {len(log_analyzer.log_paths)} log file(s)")
             log_findings, suspicious_ips = log_analyzer.analyze()
             result.log_findings = log_findings
-            if not self.json_output:
+            if self._show_progress:
                 print(f"  Log findings: {len(log_findings)}")
                 if suspicious_ips:
                     print(f"  Suspicious IPs: {len(suspicious_ips)}")
             # Store IPs in summary later
             result.summary["suspicious_ips"] = suspicious_ips
-            print()
+            if self._show_progress:
+                print()
 
         # ── Build infection timeline ──
         # Run timeline if we have any findings from mtime, logs, or file scan
         has_temporal_data = (result.mtime_findings or result.log_findings
                             or result.findings or result.db_findings)
         if has_temporal_data and (self.check_mtime or self.analyze_logs):
-            if not self.json_output:
+            if self._show_progress:
                 print("  Building infection timeline...")
             timeline_builder = TimelineBuilder(self.path, verbose=self.verbose)
             result.timeline = timeline_builder.build(result)
-            if not self.json_output:
+            if self._show_progress:
                 print(f"  Timeline events: {len(result.timeline)}")
-            print()
+                print()
 
         # ── Deduplicate & sort ──
         seen = set()
@@ -2255,7 +2204,26 @@ class An4Scanner:
         if self.json_output:
             self._print_json_report(result)
             return
+        if self.quiet:
+            self._print_quiet_summary(result)
+            return
         self._print_text_report(result)
+
+    def _print_quiet_summary(self, result: ScanResult):
+        """Print only a one-line summary for --quiet mode."""
+        s = result.summary
+        total = s["total_findings"] + s["total_suspicious_files"]
+        crit = s["by_severity"].get(CRITICAL, 0)
+        high = s["by_severity"].get(HIGH, 0)
+        med = s["by_severity"].get(MEDIUM, 0)
+        if total == 0:
+            print(f"\033[92m✓ No threats detected ({result.total_files_scanned} files scanned){RESET}")
+        elif crit > 0:
+            print(f"{SEVERITY_COLORS[CRITICAL]}⚠ {total} finding(s): {crit} critical, {high} high, {med} medium ({result.total_files_scanned} files){RESET}")
+        elif high > 0:
+            print(f"{SEVERITY_COLORS[HIGH]}⚠ {total} finding(s): {high} high, {med} medium ({result.total_files_scanned} files){RESET}")
+        else:
+            print(f"{SEVERITY_COLORS[MEDIUM]}△ {total} finding(s): {med} medium or lower ({result.total_files_scanned} files){RESET}")
 
     def _print_json_report(self, result: ScanResult):
         output = {
@@ -2444,36 +2412,6 @@ class An4Scanner:
         print()
 
 
-# ─── Integrity checker ─────────────────────────────────────────────────────────
-
-class IntegrityChecker:
-    """Check if Magento core files have been modified by comparing checksums."""
-
-    def __init__(self, magento_root: Path):
-        self.root = magento_root
-        self.vendor_dir = magento_root / "vendor" / "magento"
-
-    def check_modified_core_files(self) -> list[dict]:
-        """
-        Compare files in app/code/Magento against vendor/magento originals.
-        Also flag any .php/.js/.phtml in core dirs with recent modification dates.
-        """
-        findings = []
-
-        # Check for overridden core files
-        app_code_magento = self.root / "app" / "code" / "Magento"
-        if app_code_magento.exists():
-            for fpath in app_code_magento.rglob("*"):
-                if fpath.is_file():
-                    findings.append({
-                        "file": str(fpath.relative_to(self.root)),
-                        "severity": MEDIUM,
-                        "reason": "Core override in app/code/Magento - verify legitimacy",
-                    })
-
-        return findings
-
-
 # ─── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -2491,6 +2429,7 @@ Examples:
   %(prog)s /var/www/magento2 --version-check
   %(prog)s /var/www/magento2 --logs --log-path /var/log/nginx/access.log
   %(prog)s /var/www/magento2 --whitelist vendor/custom lib/custom
+  %(prog)s /var/www/magento2 --all --quiet
         """,
     )
     parser.add_argument("path", help="Path to Magento 2 installation root")
@@ -2530,6 +2469,8 @@ Examples:
                         help="Path(s) to access log files (auto-detected if not specified)")
     parser.add_argument("--all", action="store_true",
                         help="Enable all scan modules")
+    parser.add_argument("-q", "--quiet", action="store_true",
+                        help="Quiet mode - only show summary line")
 
     args = parser.parse_args()
 
@@ -2551,6 +2492,10 @@ Examples:
         print(f"Error: path is not a directory: {args.path}", file=sys.stderr)
         sys.exit(1)
 
+    # --integrity implies --mtime (integrity check is now part of MtimeChecker)
+    if args.integrity and not args.mtime:
+        args.mtime = True
+
     scanner = An4Scanner(
         path=args.path,
         workers=args.workers,
@@ -2558,8 +2503,10 @@ Examples:
         whitelist=args.whitelist,
         json_output=args.json,
         verbose=args.verbose,
+        quiet=args.quiet,
         scan_db=args.db,
         check_mtime=args.mtime,
+        check_integrity=args.integrity,
         mtime_days=args.mtime_days,
         check_permissions=args.permissions,
         use_yara=args.yara,
@@ -2570,15 +2517,6 @@ Examples:
     )
 
     result = scanner.scan()
-
-    # Integrity check
-    if args.integrity:
-        checker = IntegrityChecker(scan_path)
-        integrity_findings = checker.check_modified_core_files()
-        result.suspicious_files.extend(integrity_findings)
-        for f in integrity_findings:
-            result.summary.setdefault("by_severity", {})[f["severity"]] = \
-                result.summary.get("by_severity", {}).get(f["severity"], 0) + 1
 
     # Output
     if args.output:

@@ -51,8 +51,8 @@ chmod +x an4scan.py
 Ou directement :
 
 ```bash
-curl -sO https://raw.githubusercontent.com/mabt/an4scan/main/an4scan.py
-chmod +x an4scan.py
+curl -so /usr/local/bin/an4scan https://raw.githubusercontent.com/mabt/an4scan/main/an4scan.py
+chmod +x /usr/local/bin/an4scan
 ```
 
 ---
