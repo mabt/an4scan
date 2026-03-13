@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+dist/
+build/
+*.egg-info/
+report.json
+rapport.txt
