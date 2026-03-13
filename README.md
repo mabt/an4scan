@@ -4,6 +4,10 @@ Scanner de securite defensif pour les installations Magento 2. Detecte les fichi
 
 Inspire par des outils comme [eComscan](https://sansec.io/ecomscan), AN4SCAN est un outil open-source et gratuit concu pour etre utilise en audit, forensics ou surveillance continue.
 
+<p align="center">
+  <img src="demo.gif" alt="AN4SCAN Demo" width="800">
+</p>
+
 ---
 
 ## Fonctionnalites
