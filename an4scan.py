@@ -536,6 +536,160 @@ WHITELIST_PATHS = {
 
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
 
+# ─── Magento CVE Database ─────────────────────────────────────────────────────
+# Format: (version_affected_up_to, cve_id, severity, description, patch)
+# Versions are inclusive upper bounds: if your version <= this, you're affected
+MAGENTO_CVES = [
+    # 2024-2025 CVEs
+    ("2.4.7-p3", "CVE-2025-24434", CRITICAL,
+     "Incorrect Authorization - privilege escalation via REST API",
+     "APSB25-08 / Upgrade to 2.4.7-p4 or 2.4.8"),
+    ("2.4.7-p3", "CVE-2025-24435", HIGH,
+     "Incorrect Authorization - unauthorized access to admin features",
+     "APSB25-08 / Upgrade to 2.4.7-p4 or 2.4.8"),
+    ("2.4.7-p3", "CVE-2025-24436", MEDIUM,
+     "Incorrect Authorization - information disclosure",
+     "APSB25-08 / Upgrade to 2.4.7-p4 or 2.4.8"),
+    ("2.4.7-p2", "CVE-2024-45115", CRITICAL,
+     "Incorrect Authorization - admin privilege escalation without auth",
+     "APSB24-73 / Upgrade to 2.4.7-p3"),
+    ("2.4.7-p2", "CVE-2024-45148", HIGH,
+     "Insecure Direct Object Reference (IDOR) - account takeover",
+     "APSB24-73 / Upgrade to 2.4.7-p3"),
+    ("2.4.7-p2", "CVE-2024-45116", CRITICAL,
+     "Stored Cross-Site Scripting (XSS) - arbitrary code execution",
+     "APSB24-73 / Upgrade to 2.4.7-p3"),
+    ("2.4.7-p2", "CVE-2024-45117", HIGH,
+     "Server-Side Request Forgery (SSRF) - internal service access",
+     "APSB24-73 / Upgrade to 2.4.7-p3"),
+    ("2.4.7-p1", "CVE-2024-39397", CRITICAL,
+     "Unrestricted Upload - Remote Code Execution via file upload (Apache)",
+     "APSB24-61 / Upgrade to 2.4.7-p2"),
+    ("2.4.7-p1", "CVE-2024-39398", HIGH,
+     "Brute Force vulnerability on admin login",
+     "APSB24-61 / Upgrade to 2.4.7-p2"),
+    ("2.4.7-p1", "CVE-2024-39399", HIGH,
+     "Server-Side Request Forgery via crafted request",
+     "APSB24-61 / Upgrade to 2.4.7-p2"),
+    ("2.4.7-p1", "CVE-2024-39401", CRITICAL,
+     "OS Command Injection - authenticated RCE",
+     "APSB24-61 / Upgrade to 2.4.7-p2"),
+    ("2.4.7-p1", "CVE-2024-39402", CRITICAL,
+     "OS Command Injection - authenticated RCE (variant)",
+     "APSB24-61 / Upgrade to 2.4.7-p2"),
+    ("2.4.6-p6", "CVE-2024-34102", CRITICAL,
+     "CosmicSting - XXE/SSRF leading to RCE (ACTIVELY EXPLOITED)",
+     "APSB24-40 / Upgrade to 2.4.7-p1+ / Apply isolated patch"),
+    ("2.4.6-p5", "CVE-2024-20720", CRITICAL,
+     "OS Command Injection via crafted layout template (ACTIVELY EXPLOITED)",
+     "APSB24-18 / Upgrade to 2.4.6-p4+"),
+    ("2.4.6-p4", "CVE-2024-20719", CRITICAL,
+     "Stored XSS in admin panel leading to arbitrary code execution",
+     "APSB24-18 / Upgrade to 2.4.6-p4+"),
+    # 2023 CVEs
+    ("2.4.6-p2", "CVE-2023-38218", HIGH,
+     "Insecure Direct Object Reference - customer account information leak",
+     "APSB23-50 / Upgrade to 2.4.6-p3+"),
+    ("2.4.6-p2", "CVE-2023-38219", HIGH,
+     "Stored XSS via customer account",
+     "APSB23-50 / Upgrade to 2.4.6-p3+"),
+    ("2.4.6-p1", "CVE-2023-26366", CRITICAL,
+     "SSRF - Server-Side Request Forgery",
+     "APSB23-42 / Upgrade to 2.4.6-p2+"),
+    ("2.4.6", "CVE-2023-26359", CRITICAL,
+     "Deserialization of Untrusted Data leading to RCE",
+     "APSB23-17 / Upgrade to 2.4.6-p1+"),
+    ("2.4.5-p2", "CVE-2023-22247", CRITICAL,
+     "XML Injection leading to arbitrary file read",
+     "APSB23-17 / Upgrade to 2.4.5-p4+"),
+    # 2022 CVEs
+    ("2.4.4-p2", "CVE-2022-35698", CRITICAL,
+     "Stored XSS leading to arbitrary code execution",
+     "APSB22-48 / Upgrade to 2.4.5+"),
+    ("2.4.4-p1", "CVE-2022-35689", HIGH,
+     "Incorrect Authorization - improper access control",
+     "APSB22-38 / Upgrade to 2.4.4-p2+"),
+    ("2.4.3-p2", "CVE-2022-24086", CRITICAL,
+     "Template injection - Pre-auth RCE (ACTIVELY EXPLOITED IN THE WILD)",
+     "APSB22-12 / Upgrade to 2.4.3-p2+ / Apply isolated patch"),
+    ("2.4.3-p1", "CVE-2022-24093", CRITICAL,
+     "OS Command Injection - authenticated RCE",
+     "APSB22-13 / Upgrade to 2.4.3-p2+"),
+    # Older critical CVEs still seen in the wild
+    ("2.3.7-p3", "CVE-2021-36044", CRITICAL,
+     "GraphQL query depth DoS + information disclosure",
+     "Upgrade to 2.4.x"),
+    ("2.3.7", "CVE-2021-21024", CRITICAL,
+     "SQL Injection - blind SQL injection via admin",
+     "Upgrade to 2.4.x"),
+    ("2.3.5-p1", "CVE-2020-9689", CRITICAL,
+     "Arbitrary file write via directory traversal",
+     "Upgrade to 2.4.x"),
+]
+
+# ─── Access log exploit patterns ──────────────────────────────────────────────
+LOG_EXPLOIT_PATTERNS = [
+    ("LOG-001", CRITICAL, "log_exploit",
+     "CosmicSting XXE exploit attempt (CVE-2024-34102)",
+     r"""(?:POST|GET)\s+\S*rest/V1/guest-carts/\S*estimate-shipping-methods""",
+     r"""(?:ENTITY|DOCTYPE|SYSTEM|file://)"""),
+
+    ("LOG-002", CRITICAL, "log_exploit",
+     "Template injection RCE attempt (CVE-2022-24086)",
+     r"""(?:POST)\s+\S*(?:checkout|sales/order)""",
+     r"""(?:\{\{|construct|__destruct|unserialize|Phar)"""),
+
+    ("LOG-003", CRITICAL, "log_exploit",
+     "Admin brute force attack (multiple failed logins)",
+     r"""POST\s+\S*/admin\S*(?:/dashboard|/auth/login|/admin_html|/index/index)""",
+     None),  # Detected by frequency, not content
+
+    ("LOG-004", HIGH, "log_exploit",
+     "Suspicious file upload attempt to media/pub directory",
+     r"""POST\s+\S*(?:media|pub|static|upload)\S*\.(?:php|phtml|pht)""",
+     None),
+
+    ("LOG-005", HIGH, "log_exploit",
+     "Direct access to suspicious PHP file",
+     r"""GET\s+\S*(?:media|pub|static|var|generated)/\S*\.php""",
+     None),
+
+    ("LOG-006", HIGH, "log_exploit",
+     "SQL injection attempt in URL parameters",
+     r"""(?:GET|POST)\s+\S*(?:UNION\s+SELECT|SELECT\s+.*FROM|OR\s+1=1|AND\s+1=1|SLEEP\s*\(|BENCHMARK\s*\()""",
+     None),
+
+    ("LOG-007", HIGH, "log_exploit",
+     "Path traversal / directory traversal attempt",
+     r"""(?:GET|POST)\s+\S*(?:\.\./\.\./|%2e%2e%2f|\.\.\\|%252e%252e)""",
+     None),
+
+    ("LOG-008", HIGH, "log_exploit",
+     "Webshell/backdoor access attempt",
+     r"""GET\s+\S*(?:cmd|shell|wso|c99|r57|b374k|backdoor|hack)\S*\.php""",
+     None),
+
+    ("LOG-009", MEDIUM, "log_exploit",
+     "REST API mass enumeration / scraping",
+     r"""GET\s+\S*rest/V1/(?:products|customers|orders)\?searchCriteria""",
+     None),
+
+    ("LOG-010", HIGH, "log_exploit",
+     "Magento XMLRPC / SOAP API abuse attempt",
+     r"""POST\s+\S*(?:xmlrpc|soap|api/v2_soap)""",
+     r"""(?:methodCall|system\.listMethods|admin\.login)"""),
+
+    ("LOG-011", CRITICAL, "log_exploit",
+     "Remote code execution via layout XML (CVE-2024-20720)",
+     r"""(?:POST|GET)\s+\S*""",
+     r"""(?:layout_update|<block.*class=|ObjectManager|Interceptor)"""),
+
+    ("LOG-012", HIGH, "log_exploit",
+     "Unauthorized API token creation attempt",
+     r"""POST\s+\S*rest/V1/integration/(?:admin|customer)/token""",
+     None),
+]
+
 
 # ─── Data classes ──────────────────────────────────────────────────────────────
 
@@ -564,6 +718,10 @@ class ScanResult:
     permission_findings: list = field(default_factory=list)
     mtime_findings: list = field(default_factory=list)
     yara_findings: list = field(default_factory=list)
+    log_findings: list = field(default_factory=list)
+    version_info: dict = field(default_factory=dict)
+    cve_findings: list = field(default_factory=list)
+    timeline: list = field(default_factory=list)
     summary: dict = field(default_factory=dict)
 
 
@@ -1148,6 +1306,489 @@ class YaraScanner:
         return findings
 
 
+# ─── Magento Version Detector + CVE Checker ───────────────────────────────────
+
+class VersionDetector:
+    """Detect Magento version and check against known CVEs."""
+
+    def __init__(self, magento_root: Path, verbose: bool = False):
+        self.root = magento_root
+        self.verbose = verbose
+
+    def detect_version(self) -> dict:
+        """Detect Magento version from multiple sources."""
+        version = None
+        edition = None
+        source = None
+
+        # Method 1: composer.lock (most reliable)
+        composer_lock = self.root / "composer.lock"
+        if composer_lock.exists():
+            try:
+                data = json.loads(composer_lock.read_text())
+                for pkg in data.get("packages", []):
+                    if pkg.get("name") == "magento/magento2-base":
+                        version = pkg.get("version", "").lstrip("v")
+                        source = "composer.lock (magento2-base)"
+                        break
+                    elif pkg.get("name") == "magento/product-community-edition":
+                        version = pkg.get("version", "").lstrip("v")
+                        edition = "Community (Open Source)"
+                        source = "composer.lock (product-community-edition)"
+                    elif pkg.get("name") == "magento/product-enterprise-edition":
+                        version = pkg.get("version", "").lstrip("v")
+                        edition = "Enterprise (Commerce)"
+                        source = "composer.lock (product-enterprise-edition)"
+            except Exception:
+                pass
+
+        # Method 2: composer.json
+        if not version:
+            composer_json = self.root / "composer.json"
+            if composer_json.exists():
+                try:
+                    data = json.loads(composer_json.read_text())
+                    for req_key in ["require", "require-dev"]:
+                        reqs = data.get(req_key, {})
+                        for pkg_name in ["magento/product-community-edition",
+                                         "magento/product-enterprise-edition",
+                                         "magento/magento2-base"]:
+                            if pkg_name in reqs:
+                                version = reqs[pkg_name].lstrip("^~>=v ")
+                                source = f"composer.json ({pkg_name})"
+                                if "enterprise" in pkg_name:
+                                    edition = "Enterprise (Commerce)"
+                                elif "community" in pkg_name:
+                                    edition = "Community (Open Source)"
+                                break
+                except Exception:
+                    pass
+
+        # Method 3: Magento framework composer.json
+        if not version:
+            fw_composer = self.root / "vendor" / "magento" / "framework" / "composer.json"
+            if fw_composer.exists():
+                try:
+                    data = json.loads(fw_composer.read_text())
+                    fw_version = data.get("version", "")
+                    if fw_version:
+                        version = self._framework_to_magento_version(fw_version)
+                        source = f"framework composer.json (fw: {fw_version})"
+                except Exception:
+                    pass
+
+        # Method 4: app/etc/config.php modules list
+        if not version:
+            config_php = self.root / "app" / "etc" / "config.php"
+            if config_php.exists():
+                try:
+                    content = config_php.read_text()
+                    if "Magento_Enterprise" in content or "Magento_AdminGws" in content:
+                        edition = "Enterprise (Commerce)"
+                    else:
+                        edition = "Community (Open Source)"
+                    source = "app/etc/config.php (edition only, version unknown)"
+                except Exception:
+                    pass
+
+        if not edition:
+            edition = "Community (Open Source)"
+
+        # Determine EOL status
+        eol = self._check_eol(version) if version else None
+
+        return {
+            "version": version,
+            "edition": edition,
+            "source": source,
+            "eol": eol,
+        }
+
+    def _framework_to_magento_version(self, fw_version: str) -> Optional[str]:
+        """Approximate mapping from framework version to Magento version."""
+        mapping = {
+            "103.": "2.4.7", "102.": "2.4.6", "101.": "2.4.5",
+            "100.": "2.4.4", "99.": "2.4.3", "98.": "2.4.2",
+        }
+        for prefix, magento_ver in mapping.items():
+            if fw_version.startswith(prefix):
+                return f"~{magento_ver}"
+        return None
+
+    def _check_eol(self, version: str) -> Optional[dict]:
+        """Check if the Magento version is end-of-life."""
+        if not version:
+            return None
+        v = version.lstrip("~")
+        eol_versions = {
+            "2.3": {"eol_date": "2022-09-01", "message": "Magento 2.3.x reached EOL in September 2022. No security patches available."},
+            "2.4.0": {"eol_date": "2022-11-01", "message": "Magento 2.4.0-2.4.3 line has reached EOL."},
+            "2.4.1": {"eol_date": "2022-11-01", "message": "Magento 2.4.1 has reached EOL."},
+            "2.4.2": {"eol_date": "2022-11-01", "message": "Magento 2.4.2 has reached EOL."},
+            "2.4.3": {"eol_date": "2023-11-01", "message": "Magento 2.4.3 line has reached EOL."},
+            "2.4.4": {"eol_date": "2024-11-01", "message": "Magento 2.4.4 line has reached EOL in November 2024."},
+            "2.4.5": {"eol_date": "2025-08-01", "message": "Magento 2.4.5 line reaches EOL in August 2025. Plan upgrade to 2.4.7+."},
+        }
+        for prefix, info in eol_versions.items():
+            if v.startswith(prefix):
+                return info
+        if v.startswith("2.2") or v.startswith("2.1") or v.startswith("2.0"):
+            return {"eol_date": "2020-01-01", "message": f"Magento {v} is severely outdated and EOL. Immediate upgrade required."}
+        return None
+
+    def _parse_version_tuple(self, version: str) -> tuple:
+        """Parse version string to comparable tuple."""
+        v = version.lstrip("~v")
+        # Handle patch versions like 2.4.7-p3
+        parts = v.split("-")
+        base = parts[0]
+        patch = 0
+        if len(parts) > 1 and parts[1].startswith("p"):
+            try:
+                patch = int(parts[1][1:])
+            except ValueError:
+                pass
+        base_parts = []
+        for p in base.split("."):
+            try:
+                base_parts.append(int(p))
+            except ValueError:
+                base_parts.append(0)
+        return tuple(base_parts + [patch])
+
+    def check_cves(self, version: str) -> list[Finding]:
+        """Check detected version against known CVEs."""
+        if not version:
+            return []
+
+        findings = []
+        current = self._parse_version_tuple(version)
+
+        for affected_up_to, cve_id, severity, desc, patch in MAGENTO_CVES:
+            affected = self._parse_version_tuple(affected_up_to)
+            if current <= affected:
+                findings.append(Finding(
+                    file_path="MAGENTO_VERSION",
+                    signature_id=cve_id,
+                    severity=severity,
+                    category="cve",
+                    description=desc,
+                    line_number=0,
+                    line_content=f"Affected: <= {affected_up_to} | Fix: {patch}",
+                    context=f"Detected version: {version}",
+                ))
+
+        # Sort by severity
+        findings.sort(key=lambda f: SEVERITY_ORDER.get(f.severity, 99))
+        return findings
+
+
+# ─── Access Log Analyzer ───────────────────────────────────────────────────────
+
+class LogAnalyzer:
+    """Analyze web server access logs for exploit attempts and breach indicators."""
+
+    def __init__(self, magento_root: Path, log_paths: Optional[list] = None,
+                 verbose: bool = False):
+        self.root = magento_root
+        self.verbose = verbose
+        self.log_paths = log_paths or self._find_logs()
+        self.compiled_patterns = []
+        for sig_id, severity, category, desc, url_pattern, body_pattern in LOG_EXPLOIT_PATTERNS:
+            try:
+                url_re = re.compile(url_pattern, re.IGNORECASE)
+                body_re = re.compile(body_pattern, re.IGNORECASE) if body_pattern else None
+                self.compiled_patterns.append((sig_id, severity, category, desc, url_re, body_re))
+            except re.error:
+                pass
+
+    def _find_logs(self) -> list[str]:
+        """Auto-discover access log files."""
+        candidates = [
+            # Common Magento log locations
+            self.root / "var" / "log" / "access.log",
+            # Apache
+            Path("/var/log/apache2/access.log"),
+            Path("/var/log/apache2/other_vhosts_access.log"),
+            Path("/var/log/httpd/access_log"),
+            # Nginx
+            Path("/var/log/nginx/access.log"),
+            # cPanel/Plesk
+            Path("/var/log/apache2/domlogs"),
+        ]
+        found = []
+        for c in candidates:
+            if c.is_file():
+                found.append(str(c))
+            elif c.is_dir():
+                # Search for access logs in directory
+                for f in c.iterdir():
+                    if f.is_file() and "access" in f.name.lower():
+                        found.append(str(f))
+
+        # Also check for rotated logs
+        for log in list(found):
+            for suffix in [".1", ".2", ".gz"]:
+                rotated = Path(log + suffix)
+                if rotated.exists() and suffix != ".gz":  # Skip .gz for simplicity
+                    found.append(str(rotated))
+
+        return found
+
+    def analyze(self) -> tuple[list[Finding], list[dict]]:
+        """Analyze logs and return findings + suspicious IP summary."""
+        findings = []
+        ip_counter = defaultdict(lambda: {"count": 0, "patterns": set(), "paths": set()})
+        admin_bruteforce = defaultdict(int)
+
+        if not self.log_paths:
+            if self.verbose:
+                print("  [LOG] No access logs found", file=sys.stderr)
+            return findings, []
+
+        for log_path in self.log_paths:
+            try:
+                log_findings, log_ips, log_admin = self._analyze_file(log_path)
+                findings.extend(log_findings)
+                for ip, data in log_ips.items():
+                    ip_counter[ip]["count"] += data["count"]
+                    ip_counter[ip]["patterns"].update(data["patterns"])
+                    ip_counter[ip]["paths"].update(data["paths"])
+                for ip, count in log_admin.items():
+                    admin_bruteforce[ip] += count
+            except Exception as e:
+                if self.verbose:
+                    print(f"  [LOG] Error analyzing {log_path}: {e}", file=sys.stderr)
+
+        # Detect admin brute force by frequency
+        for ip, count in admin_bruteforce.items():
+            if count >= 10:  # 10+ admin login attempts = suspicious
+                findings.append(Finding(
+                    file_path=f"ACCESS_LOG",
+                    signature_id="LOG-003",
+                    severity=CRITICAL if count >= 50 else HIGH,
+                    category="log_exploit",
+                    description=f"Admin brute force: {count} login attempts from {ip}",
+                    line_number=0,
+                    line_content=f"IP: {ip}, Attempts: {count}",
+                ))
+
+        # Build suspicious IP summary (top attackers)
+        suspicious_ips = []
+        for ip, data in sorted(ip_counter.items(), key=lambda x: -x[1]["count"]):
+            if data["count"] >= 3:
+                suspicious_ips.append({
+                    "ip": ip,
+                    "hit_count": data["count"],
+                    "patterns_matched": list(data["patterns"])[:5],
+                    "sample_paths": list(data["paths"])[:5],
+                })
+
+        return findings, suspicious_ips[:20]  # Top 20 IPs
+
+    def _analyze_file(self, log_path: str) -> tuple[list, dict, dict]:
+        """Analyze a single log file."""
+        findings = []
+        ip_data = defaultdict(lambda: {"count": 0, "patterns": set(), "paths": set()})
+        admin_attempts = defaultdict(int)
+
+        # Common log format regex: IP - - [date] "METHOD /path HTTP/x.x" status size
+        log_re = re.compile(
+            r'^(\S+)\s+\S+\s+\S+\s+\[([^\]]+)\]\s+"(\S+)\s+(\S+)\s+\S+"\s+(\d+)\s+(\d+)'
+        )
+
+        admin_post_re = re.compile(
+            r'POST\s+\S*/admin\S*(?:/dashboard|/auth/login|/index/index|/admin_html)',
+            re.IGNORECASE
+        )
+
+        try:
+            with open(log_path, "r", errors="replace") as f:
+                for line_num, line in enumerate(f, 1):
+                    match = log_re.match(line)
+                    if not match:
+                        continue
+
+                    ip = match.group(1)
+                    request_method = match.group(3)
+                    request_path = match.group(4)
+                    status_code = match.group(5)
+                    full_request = f"{request_method} {request_path}"
+
+                    # Check for admin brute force
+                    if admin_post_re.search(full_request):
+                        admin_attempts[ip] += 1
+
+                    # Check against exploit patterns
+                    for sig_id, severity, category, desc, url_re, body_re in self.compiled_patterns:
+                        if sig_id == "LOG-003":
+                            continue  # Handled separately by frequency
+
+                        if url_re.search(full_request):
+                            if body_re is None or body_re.search(line):
+                                ip_data[ip]["count"] += 1
+                                ip_data[ip]["patterns"].add(sig_id)
+                                ip_data[ip]["paths"].add(request_path[:100])
+
+                                # Only add individual findings for high-confidence matches
+                                # to avoid flooding the report
+                                if ip_data[ip]["count"] <= 3:
+                                    findings.append(Finding(
+                                        file_path=f"LOG:{os.path.basename(log_path)}",
+                                        signature_id=sig_id,
+                                        severity=severity,
+                                        category=category,
+                                        description=desc,
+                                        line_number=line_num,
+                                        line_content=f"IP: {ip} | {full_request[:150]}",
+                                        context=f"Status: {status_code}",
+                                    ))
+                                break
+
+                    # Limit processing for very large logs
+                    if line_num > 500000:
+                        if self.verbose:
+                            print(f"  [LOG] Truncated {log_path} at 500K lines", file=sys.stderr)
+                        break
+
+        except (OSError, PermissionError) as e:
+            if self.verbose:
+                print(f"  [LOG] Cannot read {log_path}: {e}", file=sys.stderr)
+
+        return findings, dict(ip_data), dict(admin_attempts)
+
+
+# ─── Infection Timeline Builder ────────────────────────────────────────────────
+
+class TimelineBuilder:
+    """Build a chronological timeline of the infection based on all findings."""
+
+    def __init__(self, magento_root: Path, verbose: bool = False):
+        self.root = magento_root
+        self.verbose = verbose
+
+    def build(self, result) -> list[dict]:
+        """Build a timeline from all scan findings, sorted chronologically."""
+        events = []
+
+        # 1. Collect timestamps from modified files (mtime findings)
+        for f in result.mtime_findings:
+            ts = self._extract_timestamp(f.line_content)
+            if ts:
+                events.append({
+                    "timestamp": ts,
+                    "type": "file_modified",
+                    "severity": f.severity,
+                    "description": f.description,
+                    "file": f.file_path,
+                    "signature_id": f.signature_id,
+                })
+
+        # 2. Collect timestamps from malicious files (file mtime)
+        malicious_files = set()
+        for f in result.findings:
+            if f.severity in (CRITICAL, HIGH) and f.file_path not in malicious_files:
+                malicious_files.add(f.file_path)
+                fpath = self.root / f.file_path
+                if fpath.exists():
+                    try:
+                        fstat = fpath.stat()
+                        mtime = datetime.fromtimestamp(fstat.st_mtime)
+                        ctime = datetime.fromtimestamp(fstat.st_ctime)
+                        events.append({
+                            "timestamp": mtime.isoformat(),
+                            "type": "malware_file",
+                            "severity": f.severity,
+                            "description": f"Malware detected: {f.description}",
+                            "file": f.file_path,
+                            "signature_id": f.signature_id,
+                            "extra": f"mtime={mtime.strftime('%Y-%m-%d %H:%M:%S')}, "
+                                     f"ctime={ctime.strftime('%Y-%m-%d %H:%M:%S')}",
+                        })
+                    except OSError:
+                        pass
+
+        # 3. Collect timestamps from log findings
+        for f in result.log_findings:
+            # Try to extract date from log line content
+            ts = self._extract_log_timestamp(f.line_content)
+            if ts:
+                events.append({
+                    "timestamp": ts,
+                    "type": "exploit_attempt",
+                    "severity": f.severity,
+                    "description": f.description,
+                    "file": f.file_path,
+                    "signature_id": f.signature_id,
+                })
+
+        # 4. Add DB-related events (admin user creation)
+        for f in result.db_findings:
+            if "admin_user" in f.file_path:
+                ts = self._extract_timestamp(f.line_content)
+                if ts:
+                    events.append({
+                        "timestamp": ts,
+                        "type": "suspicious_admin",
+                        "severity": f.severity,
+                        "description": f.description,
+                        "file": f.file_path,
+                        "signature_id": f.signature_id,
+                    })
+
+        # 5. Reference points
+        # composer.lock modification time = last known update
+        composer_lock = self.root / "composer.lock"
+        if composer_lock.exists():
+            try:
+                mtime = datetime.fromtimestamp(composer_lock.stat().st_mtime)
+                events.append({
+                    "timestamp": mtime.isoformat(),
+                    "type": "reference",
+                    "severity": INFO,
+                    "description": "Last composer update (reference point)",
+                    "file": "composer.lock",
+                    "signature_id": "REF",
+                })
+            except OSError:
+                pass
+
+        # Sort chronologically
+        events.sort(key=lambda e: e.get("timestamp", ""))
+
+        return events
+
+    def _extract_timestamp(self, text: str) -> Optional[str]:
+        """Extract timestamp from various text formats."""
+        patterns = [
+            r"(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})",
+            r"Modified:\s*(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})",
+            r"Created:\s*(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, text)
+            if match:
+                try:
+                    dt = datetime.strptime(match.group(1), "%Y-%m-%d %H:%M:%S")
+                    return dt.isoformat()
+                except ValueError:
+                    continue
+        return None
+
+    def _extract_log_timestamp(self, text: str) -> Optional[str]:
+        """Extract timestamp from log line."""
+        # Common log format: [10/Oct/2024:13:55:36 +0200]
+        match = re.search(r"\[(\d{2}/\w{3}/\d{4}:\d{2}:\d{2}:\d{2})", text)
+        if match:
+            try:
+                dt = datetime.strptime(match.group(1), "%d/%b/%Y:%H:%M:%S")
+                return dt.isoformat()
+            except ValueError:
+                pass
+        # Also try ISO format
+        return self._extract_timestamp(text)
+
+
 # ─── Scanner ───────────────────────────────────────────────────────────────────
 
 class An4Scanner:
@@ -1156,7 +1797,9 @@ class An4Scanner:
                  verbose: bool = False, scan_db: bool = False,
                  check_mtime: bool = False, mtime_days: int = 7,
                  check_permissions: bool = False,
-                 use_yara: bool = False, yara_rules: Optional[str] = None):
+                 use_yara: bool = False, yara_rules: Optional[str] = None,
+                 check_version: bool = False, analyze_logs: bool = False,
+                 log_paths: Optional[list] = None):
         self.path = Path(path).resolve()
         self.workers = workers
         self.min_severity = min_severity
@@ -1169,6 +1812,9 @@ class An4Scanner:
         self.check_permissions = check_permissions
         self.use_yara = use_yara
         self.yara_rules = yara_rules
+        self.check_version = check_version
+        self.analyze_logs = analyze_logs
+        self.log_paths = log_paths
         self.compiled_sigs = self._compile_signatures()
         self.compiled_filenames = self._compile_filename_patterns()
 
@@ -1389,6 +2035,10 @@ class An4Scanner:
                 modules.append("PERMS")
             if self.use_yara:
                 modules.append("YARA")
+            if self.check_version:
+                modules.append("VERSION/CVE")
+            if self.analyze_logs:
+                modules.append("LOGS")
             if modules:
                 print(f"  Modules:  {', '.join(modules)}")
             print()
@@ -1475,6 +2125,61 @@ class An4Scanner:
                 print("  YARA: skipped (yara-python not installed)")
             print()
 
+        # ── Version detection + CVE check ──
+        if self.check_version:
+            if not self.json_output:
+                print("  Detecting Magento version...")
+            detector = VersionDetector(self.path, verbose=self.verbose)
+            result.version_info = detector.detect_version()
+            version = result.version_info.get("version")
+            if not self.json_output:
+                if version:
+                    edition = result.version_info.get("edition", "Unknown")
+                    print(f"  Version: {version} ({edition})")
+                    eol = result.version_info.get("eol")
+                    if eol:
+                        print(f"  {SEVERITY_COLORS[CRITICAL]}⚠ EOL: {eol['message']}{RESET}")
+                else:
+                    print("  Version: could not detect")
+            if version:
+                result.cve_findings = detector.check_cves(version)
+                if not self.json_output:
+                    crit_cves = sum(1 for f in result.cve_findings if f.severity == CRITICAL)
+                    print(f"  CVEs: {len(result.cve_findings)} known vulnerabilities"
+                          f" ({crit_cves} critical)")
+            print()
+
+        # ── Log analysis ──
+        if self.analyze_logs:
+            if not self.json_output:
+                print("  Analyzing access logs...")
+            log_analyzer = LogAnalyzer(self.path, log_paths=self.log_paths,
+                                       verbose=self.verbose)
+            if not self.json_output and log_analyzer.log_paths:
+                print(f"  Found {len(log_analyzer.log_paths)} log file(s)")
+            log_findings, suspicious_ips = log_analyzer.analyze()
+            result.log_findings = log_findings
+            if not self.json_output:
+                print(f"  Log findings: {len(log_findings)}")
+                if suspicious_ips:
+                    print(f"  Suspicious IPs: {len(suspicious_ips)}")
+            # Store IPs in summary later
+            result.summary["suspicious_ips"] = suspicious_ips
+            print()
+
+        # ── Build infection timeline ──
+        # Run timeline if we have any findings from mtime, logs, or file scan
+        has_temporal_data = (result.mtime_findings or result.log_findings
+                            or result.findings or result.db_findings)
+        if has_temporal_data and (self.check_mtime or self.analyze_logs):
+            if not self.json_output:
+                print("  Building infection timeline...")
+            timeline_builder = TimelineBuilder(self.path, verbose=self.verbose)
+            result.timeline = timeline_builder.build(result)
+            if not self.json_output:
+                print(f"  Timeline events: {len(result.timeline)}")
+            print()
+
         # ── Deduplicate & sort ──
         seen = set()
         deduped = []
@@ -1509,6 +2214,8 @@ class An4Scanner:
             + result.permission_findings
             + result.mtime_findings
             + result.yara_findings
+            + result.log_findings
+            + result.cve_findings
         )
 
         for f in all_findings:
@@ -1531,13 +2238,15 @@ class An4Scanner:
                 "permissions": len(result.permission_findings),
                 "mtime": len(result.mtime_findings),
                 "yara": len(result.yara_findings),
+                "log_analysis": len(result.log_findings),
+                "cve": len(result.cve_findings),
             },
         }
 
     def _print_banner(self):
         print(f"""
 {BOLD}╔══════════════════════════════════════════════════════╗
-║                  AN4SCAN v2.0                        ║
+║                  AN4SCAN v3.0                        ║
 ║          Magento 2 Malware Scanner                   ║
 ╚══════════════════════════════════════════════════════╝{RESET}
 """)
@@ -1562,6 +2271,10 @@ class An4Scanner:
             "permission_findings": [asdict(f) for f in result.permission_findings],
             "mtime_findings": [asdict(f) for f in result.mtime_findings],
             "yara_findings": [asdict(f) for f in result.yara_findings],
+            "log_findings": [asdict(f) for f in result.log_findings],
+            "version_info": result.version_info,
+            "cve_findings": [asdict(f) for f in result.cve_findings],
+            "timeline": result.timeline,
         }
         print(json.dumps(output, indent=2))
 
@@ -1621,6 +2334,41 @@ class An4Scanner:
                 print(f"           {DIM}{sf['reason']}{RESET}")
             print()
 
+        # Version info
+        if result.version_info and result.version_info.get("version"):
+            vi = result.version_info
+            print(f"{BOLD}  MAGENTO VERSION{RESET}")
+            print(f"  {'─' * 40}")
+            print(f"    Version:  {vi['version']}")
+            print(f"    Edition:  {vi.get('edition', 'Unknown')}")
+            print(f"    Source:   {vi.get('source', 'Unknown')}")
+            eol = vi.get("eol")
+            if eol:
+                print(f"    {SEVERITY_COLORS[CRITICAL]}⚠ {eol['message']}{RESET}")
+            print()
+
+        # CVE findings
+        if result.cve_findings:
+            print(f"{BOLD}  KNOWN VULNERABILITIES (CVEs){RESET}")
+            print(f"  {'─' * 40}")
+            for f in result.cve_findings:
+                color = SEVERITY_COLORS.get(f.severity, "")
+                print(f"  {color}[{f.severity:8s}] {f.signature_id}{RESET}")
+                print(f"           {f.description}")
+                print(f"           {DIM}{f.line_content}{RESET}")
+            print()
+
+        # Suspicious IPs from log analysis
+        suspicious_ips = s.get("suspicious_ips", [])
+        if suspicious_ips:
+            print(f"{BOLD}  TOP SUSPICIOUS IPs (from access logs){RESET}")
+            print(f"  {'─' * 40}")
+            for ip_info in suspicious_ips[:10]:
+                print(f"    {SEVERITY_COLORS[HIGH]}{ip_info['ip']:18s}{RESET}"
+                      f" {ip_info['hit_count']} hits"
+                      f" | Patterns: {', '.join(ip_info['patterns_matched'])}")
+            print()
+
         # All findings grouped by source
         finding_groups = [
             ("DETAILED FINDINGS (File Scan)", result.findings),
@@ -1628,6 +2376,7 @@ class An4Scanner:
             ("PERMISSION FINDINGS", result.permission_findings),
             ("RECENTLY MODIFIED FILES", result.mtime_findings),
             ("YARA FINDINGS", result.yara_findings),
+            ("ACCESS LOG FINDINGS", result.log_findings),
         ]
 
         for title, findings_list in finding_groups:
@@ -1652,6 +2401,31 @@ class An4Scanner:
                     print(f"  {DIM}Code: {content}{RESET}")
                 if f.context:
                     print(f"  {DIM}Context: {f.context}{RESET}")
+            print()
+
+        # Infection timeline
+        if result.timeline:
+            print(f"{BOLD}  INFECTION TIMELINE{RESET}")
+            print(f"  {'─' * 40}")
+            for event in result.timeline:
+                ts = event.get("timestamp", "????-??-??")[:19]
+                etype = event.get("type", "unknown")
+                severity = event.get("severity", INFO)
+                color = SEVERITY_COLORS.get(severity, "")
+
+                type_icons = {
+                    "reference": "·",
+                    "file_modified": "~",
+                    "malware_file": "!",
+                    "exploit_attempt": "→",
+                    "suspicious_admin": "⊕",
+                }
+                icon = type_icons.get(etype, "?")
+
+                print(f"  {DIM}{ts}{RESET}  {color}{icon}{RESET} "
+                      f"{event.get('description', '')[:80]}")
+                if event.get("file"):
+                    print(f"  {DIM}{' ' * 21}{event['file']}{RESET}")
             print()
 
         print(f"{BOLD}{'═' * 60}{RESET}")
@@ -1714,6 +2488,8 @@ Examples:
   %(prog)s /var/www/magento2 --all
   %(prog)s /var/www/magento2 --db --permissions --mtime --mtime-days 14
   %(prog)s /var/www/magento2 --yara --yara-rules /path/to/rules/
+  %(prog)s /var/www/magento2 --version-check
+  %(prog)s /var/www/magento2 --logs --log-path /var/log/nginx/access.log
   %(prog)s /var/www/magento2 --whitelist vendor/custom lib/custom
         """,
     )
@@ -1746,8 +2522,14 @@ Examples:
                         help="Enable YARA scanning (requires yara-python)")
     parser.add_argument("--yara-rules", type=str, default=None,
                         help="Path to additional YARA rules file or directory")
+    parser.add_argument("--version-check", action="store_true",
+                        help="Detect Magento version and check for known CVEs")
+    parser.add_argument("--logs", action="store_true",
+                        help="Analyze access logs for exploit attempts and breach indicators")
+    parser.add_argument("--log-path", nargs="*", default=None,
+                        help="Path(s) to access log files (auto-detected if not specified)")
     parser.add_argument("--all", action="store_true",
-                        help="Enable all scan modules (--db --permissions --mtime --yara --integrity)")
+                        help="Enable all scan modules")
 
     args = parser.parse_args()
 
@@ -1758,6 +2540,8 @@ Examples:
         args.mtime = True
         args.yara = True
         args.integrity = True
+        args.version_check = True
+        args.logs = True
 
     scan_path = Path(args.path)
     if not scan_path.exists():
@@ -1780,6 +2564,9 @@ Examples:
         check_permissions=args.permissions,
         use_yara=args.yara,
         yara_rules=args.yara_rules,
+        check_version=args.version_check,
+        analyze_logs=args.logs,
+        log_paths=args.log_path,
     )
 
     result = scanner.scan()
