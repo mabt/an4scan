@@ -325,26 +325,60 @@ Le module `--db` lit automatiquement les credentials depuis `app/etc/env.php` et
 
 ## Support YARA
 
-### Regles integrees
+### Ai-je besoin de YARA ?
 
-AN4SCAN inclut 7 regles YARA precompilees couvrant les menaces les plus courantes. Elles sont activees automatiquement avec `--yara`.
+**Pour un audit Magento standard : non.** Les 60+ signatures regex integrees couvrent deja la majorite des menaces (skimmers, backdoors, webshells, obfuscation). Le scan de base sans YARA est suffisant pour 90% des cas.
 
-### Regles externes
+**YARA devient utile quand :**
+- Vous faites du **forensics approfondi** et suspectez un malware avance/custom
+- Vous voulez beneficier de **milliers de regles communautaires** (webshells, hack tools, crypto miners)
+- Vous avez besoin de detection **binaire** (patterns hex dans des fichiers obfusques, code cache dans des images)
 
-Vous pouvez charger vos propres regles ou des regles communautaires :
+### Difference entre regex et YARA
+
+| | Regex integrees | YARA |
+|---|---|---|
+| Dependances | Aucune | `pip install yara-python` |
+| Signatures | 60+ optimisees Magento | 7 integrees + milliers via rulesets externes |
+| Mode de scan | Texte, ligne par ligne | Binaire, fichier entier |
+| Avantage | Rapide, numero de ligne exact | Conditions combinees (ex: "header JPG + code PHP"), patterns hex |
+
+### Installation
 
 ```bash
-# Un seul fichier
-python3 an4scan.py /var/www/magento2 --yara --yara-rules custom_rules.yar
+pip install yara-python
+```
 
-# Un dossier complet (charge tous les .yar et .yara)
+### Utilisation
+
+```bash
+# Regles integrees uniquement (7 regles)
+python3 an4scan.py /var/www/magento2 --yara
+
+# Avec des regles externes (recommande pour forensics)
+python3 an4scan.py /var/www/magento2 --yara --yara-rules /path/to/rules.yar
+
+# Avec un dossier de regles (charge tous les .yar et .yara)
 python3 an4scan.py /var/www/magento2 --yara --yara-rules /etc/yara-rules/
 ```
 
-Compatibles avec les rulesets publics :
-- [Sansec](https://sansec.io/) (eComscan signatures)
-- [THOR](https://www.nextron-systems.com/thor/) / [signature-base](https://github.com/Neo23x0/signature-base)
-- [YARA-Rules](https://github.com/Yara-Rules/rules)
+### Rulesets externes recommandes
+
+Pour une couverture maximale, telechargez **signature-base** (le plus complet, ~4000 regles) :
+
+```bash
+git clone https://github.com/Neo23x0/signature-base.git /opt/yara-rules
+python3 an4scan.py /var/www/magento2 --yara --yara-rules /opt/yara-rules/yara/
+```
+
+Autres rulesets compatibles :
+
+| Ruleset | Contenu |
+|---------|---------|
+| [Neo23x0/signature-base](https://github.com/Neo23x0/signature-base) | Webshells, backdoors, hack tools (~4000 regles) |
+| [Yara-Rules/rules](https://github.com/Yara-Rules/rules) | Malware generique, packers, crypto miners |
+| [reversinglabs/reversinglabs-yara-rules](https://github.com/reversinglabs/reversinglabs-yara-rules) | Malware par famille |
+| [Sansec](https://sansec.io/) | Signatures eComscan (Magento-specifique) |
 
 ---
 
