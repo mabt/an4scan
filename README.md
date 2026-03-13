@@ -36,7 +36,7 @@ pip install yara-python
 ## Installation
 
 ```bash
-git clone https://github.com/mabe/an4scan.git
+git clone https://github.com/mabt/an4scan.git
 cd an4scan
 chmod +x an4scan.py
 ```
@@ -44,7 +44,7 @@ chmod +x an4scan.py
 Ou directement :
 
 ```bash
-curl -sO https://raw.githubusercontent.com/mabe/an4scan/main/an4scan.py
+curl -sO https://raw.githubusercontent.com/mabt/an4scan/main/an4scan.py
 chmod +x an4scan.py
 ```
 
