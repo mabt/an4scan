@@ -1,8 +1,6 @@
 # AN4SCAN - Magento 2 Malware Scanner
 
-Open-source security scanner for Magento 2. Detects backdoors, credit card skimmers (Magecart), obfuscated code, database injections, permission issues, known CVEs, and exploit attempts in access logs.
-
-Inspired by [eComscan](https://sansec.io/ecomscan) — free, single-file, zero dependencies.
+Open-source security scanner for Magento 2. Detects backdoors, credit card skimmers (Magecart), obfuscated code, database injections, permission issues, known CVEs, and exploit attempts in access logs. Free, single-file, zero dependencies.
 
 <p align="center">
   <img src="demo.gif" alt="AN4SCAN Demo" width="800">
