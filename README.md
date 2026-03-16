@@ -1,183 +1,160 @@
 # AN4SCAN - Magento 2 Malware Scanner
 
-Scanner de securite defensif pour les installations Magento 2. Detecte les fichiers infectes, les backdoors PHP, les skimmers de cartes bancaires (Magecart), le code obfusque, les injections en base de donnees, les problemes de permissions, les CVEs connues et les tentatives d'exploitation dans les logs.
+Open-source security scanner for Magento 2. Detects backdoors, credit card skimmers (Magecart), obfuscated code, database injections, permission issues, known CVEs, and exploit attempts in access logs.
 
-Inspire par des outils comme [eComscan](https://sansec.io/ecomscan), AN4SCAN est un outil open-source et gratuit concu pour etre utilise en audit, forensics ou surveillance continue.
+Inspired by [eComscan](https://sansec.io/ecomscan) — free, single-file, zero dependencies.
 
 <p align="center">
   <img src="demo.gif" alt="AN4SCAN Demo" width="800">
 </p>
 
----
+## Features
 
-## Fonctionnalites
+| Module | Flag | What it does |
+|--------|------|--------------|
+| **File scan** | *(always on)* | 60+ regex signatures: CC skimmers, backdoors, webshells, obfuscation, Magento-specific patterns |
+| **Version + CVEs** | `--version` | Auto-detect Magento version, check against 25+ known critical CVEs |
+| **Database scan** | `--db` | Scan `core_config_data`, `cms_block`, `cms_page`, `email_template`, admin users, cron jobs |
+| **Log analysis** | `--logs` | Parse Apache/Nginx access logs for exploit attempts, brute force, SQL injection |
+| **Permissions** | `--permissions` | World-writable files, SUID/SGID scripts, readable `env.php` |
+| **Modified files** | `--mtime` | Core files modified after install + integrity check on `app/code/Magento` overrides |
+| **YARA scan** | `--yara` | 4 built-in binary rules + auto-load community rulesets (~1700 rules) |
+| **Timeline** | *(automatic)* | Reconstructs infection timeline from file mtimes, logs, and findings |
+| **All modules** | `--all` | Enable everything above |
 
-| Module | Flag | Description |
-|--------|------|-------------|
-| **File Scan** | *(toujours actif)* | 60+ signatures regex : skimmers CC, backdoors, webshells, obfuscation, patterns Magento specifiques |
-| **Version + CVEs** | `--version` | Detection automatique de la version Magento + base de 25+ CVEs critiques avec patches recommandes |
-| **Database Scan** | `--db` | Analyse les tables `core_config_data`, `cms_block`, `cms_page`, `email_template` + verifie les admin users suspects et les cron jobs |
-| **Log Analysis** | `--logs` | Analyse les access logs Apache/Nginx pour detecter les tentatives d'exploitation, brute force admin, injections SQL |
-| **Permission Check** | `--permissions` | Detecte fichiers/dossiers world-writable, SUID/SGID sur scripts, `env.php` world-readable |
-| **Modified Files** | `--mtime` | Compare les dates de modification des fichiers core vs `composer.lock`, detecte les PHP recents dans `pub/media`, `var`, etc. |
-| **YARA Scan** | `--yara` | 7 regles YARA integrees + support de regles externes (Sansec, THOR, custom) |
-| **Integrity Check** | `--mtime` | Verifie les overrides de fichiers core dans `app/code/Magento` (inclus dans --mtime) |
-| **Timeline** | *(automatique)* | Reconstruction chronologique de l'infection a partir des mtimes, logs et findings |
-| **Tout activer** | `--all` | Active tous les modules ci-dessus |
-
----
-
-## Prerequis
-
-- **Python 3.8+** (aucune dependance externe pour le scan de base)
-- **mysql client** (optionnel, pour `--db`)
-- **yara-python** (optionnel, pour `--yara`)
-
-```bash
-# Optionnel : installer le support YARA
-pip install yara-python
-```
-
----
-
-## Installation
-
-```bash
-git clone https://github.com/mabt/an4scan.git
-cd an4scan
-chmod +x an4scan.py
-```
-
-Ou directement :
+## Install
 
 ```bash
 curl -so /usr/local/bin/an4scan https://raw.githubusercontent.com/mabt/an4scan/main/an4scan.py
 chmod +x /usr/local/bin/an4scan
 ```
 
----
+Or clone:
 
-## Utilisation
+```bash
+git clone https://github.com/mabt/an4scan.git
+cd an4scan && chmod +x an4scan.py
+```
 
-### Scan rapide (menaces confirmees uniquement)
+Requirements: **Python 3.8+** (no external dependencies). Optional: `mysql` CLI (for `--db`), `pip install yara-python` (for `--yara`).
+
+## Usage
+
+### Quick scan (confirmed threats only)
 
 ```bash
 an4scan /var/www/magento2
 ```
 
-Par defaut, seules les menaces confirmees (CRITICAL/HIGH) sont affichees : backdoors, skimmers, webshells, injections averes.
+By default, only confirmed threats (CRITICAL/HIGH) are shown: backdoors, skimmers, webshells, proven injections.
 
-### Scan approfondi (inclut les suspicions)
+### Deep scan (include suspicions)
 
 ```bash
 an4scan /var/www/magento2 --deep
 ```
 
-`--deep` affiche aussi les elements suspects : obfuscation, fichiers inhabituels, patterns douteux (MEDIUM/LOW/INFO).
+`--deep` also reports suspicious patterns: obfuscation, unusual files, low-confidence matches (MEDIUM/LOW/INFO).
 
-### Scan complet (tous les modules)
+### Full audit (all modules)
 
 ```bash
-an4scan /var/www/magento2 --all              # menaces confirmees
-an4scan /var/www/magento2 --all --deep       # audit complet
+an4scan /var/www/magento2 --all              # confirmed threats only
+an4scan /var/www/magento2 --all --deep       # everything
 ```
 
-### Exemples courants
+### Common examples
 
 ```bash
-# Rapport JSON pour integration CI/CD
+# JSON report for CI/CD
 an4scan /var/www/magento2 -j > report.json
 
-# Detection de version + CVEs
+# Version + CVE check
 an4scan /var/www/magento2 --version
 
-# Scan DB + permissions + fichiers modifies (14 jours)
+# DB + permissions + recently modified files (14 days)
 an4scan /var/www/magento2 --db --permissions --mtime --mtime-days 14
 
-# Analyse des access logs
+# Access log analysis
 an4scan /var/www/magento2 --logs
 an4scan /var/www/magento2 --logs --log-path /var/log/nginx/access.log
 
-# Scan YARA avec regles custom
+# YARA scan with custom rules
 an4scan /var/www/magento2 --yara --yara-rules /path/to/rules/
 
-# Exclure des chemins
+# Exclude paths (known false positives)
 an4scan /var/www/magento2 --whitelist vendor/custom app/code/MyModule
 
-# Sauvegarder le rapport
-an4scan /var/www/magento2 --all -o rapport.txt
+# Save report to file
+an4scan /var/www/magento2 --all -o report.txt
 
-# Mode silencieux (resume une ligne)
+# One-line summary only
 an4scan /var/www/magento2 --all -q
 
-# Telecharger les rulesets YARA communautaires
+# Download community YARA rulesets
 an4scan --update
 
-# Voir le statut des rulesets installes
+# Show installed rulesets
 an4scan --status
 ```
 
----
-
-## Options completes
+## Options
 
 ```
-  path                    Chemin vers la racine Magento 2
+  path                    Magento 2 root path
 
 scan modules:
-  --db                    Scanner la base de donnees
-  --mtime                 Fichiers modifies recemment + integrite core
-  --mtime-days N          Fenetre de temps pour --mtime (defaut: 7)
-  --permissions           Verifier les permissions fichiers
-  --version               Detecter la version et verifier les CVEs connues
-  --logs                  Analyser les access logs
-  --log-path PATH...      Chemin(s) vers les fichiers de log
-  --yara                  Activer le scan YARA (requires yara-python)
-  --yara-rules PATH       Regles YARA supplementaires
-  --all                   Activer tous les modules
-  --deep                  Inclure les suspicions (defaut: menaces confirmees)
+  --db                    Scan database for injected malware
+  --mtime                 Recently modified core files + integrity check
+  --mtime-days N          Time window for --mtime (default: 7)
+  --permissions           Check file permissions (world-writable, SUID/SGID)
+  --version               Detect version and check known CVEs
+  --logs                  Analyze access logs for exploit attempts
+  --log-path PATH...      Access log file path(s) (auto-detected if omitted)
+  --yara                  Enable YARA scanning (requires yara-python)
+  --yara-rules PATH       Additional YARA rules file or directory
+  --all                   Enable all modules
+  --deep                  Include suspicions (default: confirmed threats only)
 
 output:
-  -j, --json              Sortie JSON
-  -o, --output FILE       Sauvegarder le rapport
-  -q, --quiet             Resume une ligne uniquement
-  -s, --severity LEVEL    Forcer le niveau minimum (CRITICAL/HIGH/MEDIUM/LOW/INFO)
-  -v, --verbose           Afficher les erreurs de scan
+  -j, --json              JSON output
+  -o, --output FILE       Save report to file
+  -q, --quiet             One-line summary only
+  -s, --severity LEVEL    Override severity filter (CRITICAL/HIGH/MEDIUM/LOW/INFO)
+  -v, --verbose           Show scan errors
 
 tuning:
-  -w, --workers N         Workers paralleles (defaut: 4)
-  --whitelist PATH...     Chemins a exclure du scan
+  -w, --workers N         Parallel workers (default: 4)
+  --whitelist PATH...     Paths to exclude from scan
 
 ruleset management:
-  --update                Telecharger/MAJ les rulesets YARA communautaires
-  --status                Afficher les rulesets YARA installes
+  --update                Download/update community YARA rulesets
+  --status                Show installed YARA rulesets
 ```
 
----
+## Version & CVE Detection
 
-## Detection de version et CVEs
+The `--version` module:
 
-Le module `--version` :
+1. Detects the version from `composer.lock`, `composer.json`, or the Magento framework
+2. Identifies the edition (Community/Open Source or Enterprise/Commerce)
+3. Checks EOL (End of Life) status
+4. Matches against 25+ known CVEs with recommended patches
 
-1. **Detecte la version** depuis `composer.lock`, `composer.json`, ou le framework Magento
-2. **Identifie l'edition** (Community/Open Source ou Enterprise/Commerce)
-3. **Verifie le statut EOL** (End of Life) de la version
-4. **Compare avec 25+ CVEs connues** et indique les patches a appliquer
+### Built-in CVE database
 
-### Base de CVEs integree
+Covers critical vulnerabilities from 2022 to 2025:
 
-Couvre les vulnerabilites critiques de 2022 a 2025 :
-
-| CVE | Severite | Description |
+| CVE | Severity | Description |
 |-----|----------|-------------|
 | CVE-2025-24434 | CRITICAL | Privilege escalation via REST API |
-| CVE-2024-34102 | CRITICAL | **CosmicSting** - XXE/SSRF leading to RCE (exploite activement) |
-| CVE-2024-39401 | CRITICAL | OS Command Injection - RCE authentifie |
-| CVE-2024-20720 | CRITICAL | OS Command Injection via layout template (exploite activement) |
-| CVE-2022-24086 | CRITICAL | **Template injection** - Pre-auth RCE (exploite massivement) |
-| ... | ... | Et 20+ autres CVEs HIGH/CRITICAL |
+| CVE-2024-34102 | CRITICAL | **CosmicSting** — XXE/SSRF leading to RCE (actively exploited) |
+| CVE-2024-39401 | CRITICAL | OS Command Injection — authenticated RCE |
+| CVE-2024-20720 | CRITICAL | OS Command Injection via layout template (actively exploited) |
+| CVE-2022-24086 | CRITICAL | **Template injection** — pre-auth RCE (mass exploited) |
+| ... | ... | 20+ more HIGH/CRITICAL CVEs |
 
-Exemple de sortie :
+Example output:
 ```
   MAGENTO VERSION
   ────────────────────────────────────
@@ -192,35 +169,33 @@ Exemple de sortie :
              Affected: <= 2.4.6-p6 | Fix: APSB24-40 / Upgrade to 2.4.7-p1+
 ```
 
----
+## Access Log Analysis
 
-## Analyse des access logs
+The `--logs` module parses Apache/Nginx access logs for exploit attempts.
 
-Le module `--logs` analyse les fichiers de logs Apache/Nginx pour identifier les tentatives d'exploitation.
+### Auto-detection
 
-### Auto-detection des logs
-
-Sans `--log-path`, AN4SCAN cherche automatiquement dans :
+Without `--log-path`, AN4SCAN searches:
 - `/var/log/apache2/access.log`
 - `/var/log/nginx/access.log`
 - `/var/log/httpd/access_log`
-- Logs cPanel/Plesk
+- cPanel/Plesk log paths
 
-### Patterns detectes (LOG-001 a LOG-012)
+### Detected patterns (LOG-001 to LOG-012)
 
-- **CosmicSting** (CVE-2024-34102) - tentatives d'exploitation XXE
-- **Template injection** (CVE-2022-24086) - RCE via checkout
-- **Brute force admin** - detection par frequence (10+ tentatives = alerte)
-- **Upload de fichiers PHP** dans media/pub/static
-- **Acces direct a des backdoors** (shell.php, wso.php, etc.)
-- **Injections SQL** dans les parametres URL
+- **CosmicSting** (CVE-2024-34102) — XXE exploitation attempts
+- **Template injection** (CVE-2022-24086) — RCE via checkout
+- **Admin brute force** — frequency-based detection (10+ attempts = alert)
+- **PHP file uploads** in media/pub/static
+- **Direct backdoor access** (shell.php, wso.php, etc.)
+- **SQL injection** in URL parameters
 - **Path traversal** (../../)
-- **Enumeration API REST** massive
-- **Creation non autorisee de tokens API**
+- **REST API enumeration**
+- **Unauthorized API token creation**
 
-### Rapport des IPs suspectes
+### Suspicious IP report
 
-Les IPs les plus actives sont regroupees avec le nombre de hits et les patterns detectes :
+Top attacking IPs are grouped with hit counts and matched patterns:
 
 ```
   TOP SUSPICIOUS IPs (from access logs)
@@ -229,16 +204,14 @@ Les IPs les plus actives sont regroupees avec le nombre de hits et les patterns 
     91.242.217.81      23 hits | Patterns: LOG-001, LOG-006
 ```
 
----
+## Infection Timeline
 
-## Timeline d'infection
+When `--mtime` or `--logs` is active, AN4SCAN builds an **infection timeline** by cross-referencing:
 
-Quand `--mtime` ou `--logs` est active, AN4SCAN construit automatiquement une **chronologie de l'infection** en croisant :
-
-- Les dates de modification des fichiers malveillants detectes
-- Les dates de creation des admin users suspects
-- Les timestamps des tentatives d'exploitation dans les logs
-- La date de dernier `composer update` (point de reference)
+- Modification dates of detected malware files
+- Creation dates of suspicious admin users
+- Timestamps of exploit attempts in logs
+- Last `composer update` date (reference point)
 
 ```
   INFECTION TIMELINE
@@ -253,203 +226,177 @@ Quand `--mtime` ou `--logs` est active, AN4SCAN construit automatiquement une **
   2024-09-04T02:15:00  ⊕ Suspicious admin user created recently
 ```
 
-Cela permet d'identifier :
-- **Le vecteur d'attaque initial** (quelle CVE a ete exploitee)
-- **La fenetre de compromission** (quand l'infection a commence)
-- **La propagation** (quels fichiers ont ete modifies et dans quel ordre)
+This helps identify:
+- **Initial attack vector** — which CVE was exploited
+- **Compromise window** — when the infection started
+- **Lateral movement** — which files were modified and in what order
 
----
+## Database Scan
 
-## Scan de la base de donnees
+The `--db` module reads credentials from `app/etc/env.php` and connects via the `mysql` CLI. No Python database library needed. Supports both TCP and unix socket connections.
 
-Le module `--db` lit automatiquement les credentials depuis `app/etc/env.php` et se connecte via le client `mysql` en ligne de commande. Aucune librairie Python supplementaire n'est necessaire.
+**Tables scanned:**
+- `core_config_data` — store config (URLs, injected scripts)
+- `cms_block` — CMS blocks (HTML/JS content)
+- `cms_page` — CMS pages (content + layout XML)
+- `email_template` — email templates
+- `admin_user` — recently created admin users
+- `cron_schedule` — suspicious cron jobs
 
-**Tables scannees :**
-- `core_config_data` -- configuration du store (URLs, scripts injectes)
-- `cms_block` -- blocs CMS (contenu HTML/JS)
-- `cms_page` -- pages CMS (contenu + layout XML)
-- `email_template` -- templates d'emails
-- `admin_user` -- utilisateurs admin crees recemment
-- `cron_schedule` -- taches cron suspectes
+## Detection Categories
 
----
+### Credit card skimmers (CC-001 to CC-007)
+- Card number patterns in code
+- Exfiltration via `fetch`, `XMLHttpRequest`, `WebSocket`, `sendBeacon`, `new Image`
+- Known Magecart domains (typosquatting Google Analytics, jQuery CDN, etc.)
+- Payment form interception
+- Base64-encoded exfiltration URLs
 
-## Categories de detection
+### PHP backdoors (BD-001 to BD-012)
+- `eval(base64_decode(...))` and variants
+- Known webshells: WSO, C99, R57, B374K, FilesMan
+- Direct execution of `$_GET`/`$_POST`/`$_REQUEST`
+- `preg_replace` with `/e` modifier
+- Arbitrary file upload
+- Dynamic function construction (`chr()`, hex)
 
-### Skimmers de cartes bancaires (CC-001 a CC-007)
-- Patterns de numeros de carte dans le code
-- Exfiltration par `fetch`, `XMLHttpRequest`, `WebSocket`, `sendBeacon`, `new Image`
-- Domaines Magecart connus (typosquatting Google Analytics, jQuery CDN, etc.)
-- Interception de formulaires de paiement
-- URLs d'exfiltration encodees en base64
+### Obfuscation (OB-001 to OB-007 + OB-ENT)
+- Nested decoding chains (base64 > gzinflate > str_rot13...)
+- Long base64 strings (>500 chars)
+- Variable variables `${$var}()`
+- Shannon entropy analysis (detects obfuscated code without known signatures)
+- ionCube / Zend Guard (may hide malware)
 
-### Backdoors PHP (BD-001 a BD-012)
-- `eval(base64_decode(...))` et variantes
-- Webshells connus : WSO, C99, R57, B374K, FilesMan
-- Execution directe de `$_GET`/`$_POST`/`$_REQUEST`
-- `preg_replace` avec modificateur `/e`
-- Upload de fichiers arbitraires
-- Construction dynamique de fonctions (`chr()`, hex)
+### Magento-specific (MG-001 to MG-008)
+- Modified core payment templates
+- Malicious observers on checkout events
+- Unauthorized admin user creation
+- Modified `env.php` / `config.php`
+- Unauthorized modules with suspicious code
 
-### Obfuscation (OB-001 a OB-007 + OB-ENT)
-- Chaines de decodage imbriquees (base64 > gzinflate > str_rot13...)
-- Longues chaines base64 (>500 caracteres)
-- Variables variables `${$var}()`
-- Analyse d'entropie de Shannon (detecte le code obfusque sans signature connue)
-- ionCube / Zend Guard (peut cacher du malware)
+### Server threats (SV-001 to SV-004)
+- `.htaccess` redirects to malicious domains
+- `.htaccess` enabling PHP execution in upload directories
+- Persistent malware via cron jobs
+- `mail()` exfiltration
 
-### Patterns Magento (MG-001 a MG-008)
-- Modification de modeles de paiement core
-- Observers malveillants sur les evenements checkout
-- Creation d'utilisateurs admin non autorisee
-- Modification de `env.php` / `config.php`
-- Modules non autorises avec du code suspect
-
-### Menaces serveur (SV-001 a SV-004)
-- Redirections `.htaccess` vers des domaines malveillants
-- `.htaccess` autorisant l'execution PHP dans les dossiers d'upload
-- Malware persistant via cron jobs
-- Utilisation de `mail()` pour exfiltration
-
-### Noms de fichiers suspects
-- PHP dans `media/`, `static/`, `var/`, `cache/`
-- Fichiers caches (`.x.php`)
+### Suspicious filenames
+- PHP files in `media/`, `static/`, `var/`, `cache/`
+- Hidden files (`.x.php`)
 - Double extensions (`.php.jpg`)
-- Fichiers WordPress dans une installation Magento
-- Utilitaires dangereux (`adminer.php`, `phpinfo.php`)
+- WordPress files in a Magento installation
+- Dangerous utilities (`adminer.php`, `phpinfo.php`)
 
-### Injections en base de donnees (DBI-001 a DBI-010)
-- Scripts JS injectes dans les blocs CMS et pages
-- Tags `<script>` chargeant des domaines externes
-- Payloads base64 dans le contenu DB
-- Iframes injectees
-- Code PHP dans les champs de la base
-- Utilisateurs admin suspects (emails jetables, noms generiques)
-- Cron jobs suspects dans `cron_schedule`
+### Database injections (DBI-001 to DBI-010)
+- Injected JS scripts in CMS blocks and pages
+- `<script>` tags loading external domains
+- Base64 payloads in DB content
+- Injected iframes
+- PHP code in database fields
+- Suspicious admin users (disposable emails, generic names)
+- Suspicious cron jobs
 
-### Permissions (PERM-001 a PERM-005)
-- Fichiers et dossiers world-writable
-- Bits SUID/SGID sur les scripts
-- PHP executable dans les repertoires web
-- `env.php` lisible par tous
+### Permissions (PERM-001 to PERM-005)
+- World-writable files and directories
+- SUID/SGID bits on scripts
+- PHP executable in web directories
+- World-readable `env.php`
 
-### Regles YARA integrees
-- `magento_skimmer_generic` -- Skimmer de carte generique
-- `php_webshell_generic` -- Webshell/backdoor PHP
-- `php_backdoor_obfuscated` -- Backdoor PHP obfusquee
-- `magento_malware_known` -- Familles de malware Magento connues
-- `php_in_image` -- Code PHP cache dans des images
-- `suspicious_js_obfuscation` -- JavaScript fortement obfusque
-- `magento_config_theft` -- Vol de configuration/credentials
+## YARA Support
 
----
+### Do I need YARA?
 
-## Support YARA
+**For a standard Magento audit: no.** The 60+ built-in regex signatures cover most threats. The base scan without YARA handles 90% of cases.
 
-### Ai-je besoin de YARA ?
+**YARA is useful when:**
+- You're doing **deep forensics** and suspect advanced/custom malware
+- You want access to **thousands of community rules** (webshells, hack tools, crypto miners)
+- You need **binary detection** (hex patterns in obfuscated files, code hidden in images)
 
-**Pour un audit Magento standard : non.** Les 60+ signatures regex integrees couvrent deja la majorite des menaces (skimmers, backdoors, webshells, obfuscation). Le scan de base sans YARA est suffisant pour 90% des cas.
+### Regex vs YARA
 
-**YARA devient utile quand :**
-- Vous faites du **forensics approfondi** et suspectez un malware avance/custom
-- Vous voulez beneficier de **milliers de regles communautaires** (webshells, hack tools, crypto miners)
-- Vous avez besoin de detection **binaire** (patterns hex dans des fichiers obfusques, code cache dans des images)
-
-### Difference entre regex et YARA
-
-| | Regex integrees | YARA |
+| | Built-in regex | YARA |
 |---|---|---|
-| Dependances | Aucune | `pip install yara-python` |
-| Signatures | 60+ optimisees Magento | 7 integrees + milliers via rulesets externes |
-| Mode de scan | Texte, ligne par ligne | Binaire, fichier entier |
-| Avantage | Rapide, numero de ligne exact | Conditions combinees (ex: "header JPG + code PHP"), patterns hex |
+| Dependencies | None | `pip install yara-python` |
+| Signatures | 60+ Magento-optimized | 4 built-in + thousands via community rulesets |
+| Scan mode | Text, line by line | Binary, whole file |
+| Strength | Fast, exact line numbers | Combined conditions (e.g. "JPG header + PHP code"), hex patterns |
 
-### Installation
+### Setup
 
 ```bash
 pip install yara-python
 ```
 
-### Rulesets communautaires (recommande)
+### Community rulesets (recommended)
 
-an4scan peut telecharger automatiquement 5 rulesets communautaires (~1700 fichiers de regles) :
+AN4SCAN can auto-download 5 community rulesets (~1700 rule files):
 
 ```bash
-# Telecharger/mettre a jour tous les rulesets
-an4scan --update
-
-# Verifier le statut des rulesets installes
-an4scan --status
+an4scan --update    # download/update all rulesets
+an4scan --status    # show installed rulesets
 ```
 
-Les rulesets sont stockes dans `~/.an4scan/rules/` et charges automatiquement avec `--yara`.
+Rulesets are stored in `~/.an4scan/rules/` and loaded automatically with `--yara`.
 
-| Ruleset | Contenu |
+| Ruleset | Content |
 |---------|---------|
-| [Sansec/ecomscan](https://github.com/gwillem/magento-malware-scanner) | Signatures Magento-specifique (skimmers, backdoors) |
-| [Mage Security Council](https://github.com/magesec/magesecurityscanner) | YARA rules Magento (standard + deep scan) |
-| [Neo23x0/signature-base](https://github.com/Neo23x0/signature-base) | Webshells, backdoors, hack tools (~700 regles) |
-| [ReversingLabs](https://github.com/reversinglabs/reversinglabs-yara-rules) | Malware par famille (~300 regles) |
-| [Elastic](https://github.com/elastic/protections-artifacts) | Protections cross-platform (~670 regles) |
+| [Sansec/ecomscan](https://github.com/gwillem/magento-malware-scanner) | Magento-specific signatures (skimmers, backdoors) |
+| [Mage Security Council](https://github.com/magesec/magesecurityscanner) | Magento YARA rules (standard + deep scan) |
+| [Neo23x0/signature-base](https://github.com/Neo23x0/signature-base) | Webshells, backdoors, hack tools (~700 rules) |
+| [ReversingLabs](https://github.com/reversinglabs/reversinglabs-yara-rules) | Malware families (~300 rules) |
+| [Elastic](https://github.com/elastic/protections-artifacts) | Cross-platform protections (~670 rules) |
 
-### Utilisation
+### Usage
 
 ```bash
-# Regles integrees uniquement (4 regles binaires)
+# Built-in rules only (4 binary rules)
 an4scan /var/www/magento2 --yara
 
-# Avec rulesets communautaires (telecharger d'abord avec --update)
+# With community rulesets (run --update first)
 an4scan /var/www/magento2 --yara
 
-# Avec des regles custom supplementaires
+# With additional custom rules
 an4scan /var/www/magento2 --yara --yara-rules /path/to/custom-rules/
 ```
 
----
+## Exit Codes
 
-## Codes de sortie
+| Code | Meaning |
+|------|---------|
+| `0` | No CRITICAL or HIGH findings |
+| `1` | At least one HIGH finding |
+| `2` | At least one CRITICAL finding |
 
-| Code | Signification |
-|------|---------------|
-| `0` | Aucune alerte critique ou haute |
-| `1` | Au moins un finding HIGH |
-| `2` | Au moins un finding CRITICAL |
-
-Utile pour l'integration CI/CD :
+Useful for CI/CD:
 
 ```bash
-python3 an4scan.py /var/www/magento2 -s HIGH --json > report.json
+an4scan /var/www/magento2 --all -j > report.json
 if [ $? -eq 2 ]; then
-  echo "CRITICAL: malware detecte!"
-  # envoyer une alerte...
+  echo "CRITICAL: malware detected!"
+  # send alert...
 fi
 ```
 
----
+## False Positives
 
-## Faux positifs
+Some legitimate patterns may trigger alerts (e.g. `eval()` in libraries, base64 in legitimate code). Strategies:
 
-Certains patterns legitimes peuvent declencher des alertes (ex: `eval()` dans des librairies, base64 dans du code legitime). Strategies pour gerer les faux positifs :
+1. **Whitelist**: `--whitelist vendor/legitimate-module app/code/MyModule`
+2. **Filter by severity**: default mode already filters to HIGH+ (use `--deep` to see everything)
+3. **Auto-whitelisted paths**: `vendor/phpunit`, `dev/tests`, `setup/src`, `lib/internal/Magento/Framework/Code/Generator`
 
-1. **Whitelist** : `--whitelist vendor/legitimate-module app/code/MyModule`
-2. **Filtrer par severite** : `-s HIGH` pour ignorer les MEDIUM/LOW
-3. **Paths auto-whitelistes** : `vendor/phpunit`, `dev/tests`, `setup/src`, `lib/internal/Magento/Framework/Code/Generator`
-
----
-
-## Licence
+## License
 
 MIT
 
----
+## Contributing
 
-## Contribuer
+Contributions welcome:
 
-Les contributions sont les bienvenues. En particulier :
-
-- Nouvelles signatures de malware Magento
-- Regles YARA supplementaires
-- Mise a jour de la base de CVEs
-- Reduction des faux positifs
-- Nouveaux patterns de detection dans les logs
-- Support d'autres CMS e-commerce (WooCommerce, PrestaShop)
+- New Magento malware signatures
+- Additional YARA rules
+- CVE database updates
+- False positive reductions
+- New log detection patterns
+- Support for other e-commerce CMS (WooCommerce, PrestaShop)
