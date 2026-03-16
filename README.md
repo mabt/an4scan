@@ -59,53 +59,58 @@ chmod +x /usr/local/bin/an4scan
 
 ## Utilisation
 
-### Scan basique
+### Scan rapide (menaces confirmees uniquement)
 
 ```bash
-python3 an4scan.py /var/www/magento2
+an4scan /var/www/magento2
 ```
+
+Par defaut, seules les menaces confirmees (CRITICAL/HIGH) sont affichees : backdoors, skimmers, webshells, injections averes.
+
+### Scan approfondi (inclut les suspicions)
+
+```bash
+an4scan /var/www/magento2 --deep
+```
+
+`--deep` affiche aussi les elements suspects : obfuscation, fichiers inhabituels, patterns douteux (MEDIUM/LOW/INFO).
 
 ### Scan complet (tous les modules)
 
 ```bash
-python3 an4scan.py /var/www/magento2 --all
+an4scan /var/www/magento2 --all              # menaces confirmees
+an4scan /var/www/magento2 --all --deep       # audit complet
 ```
 
 ### Exemples courants
 
 ```bash
 # Rapport JSON pour integration CI/CD
-python3 an4scan.py /var/www/magento2 --json > report.json
+an4scan /var/www/magento2 -j > report.json
 
-# Seulement les alertes critiques et hautes, 8 workers
-python3 an4scan.py /var/www/magento2 -s HIGH -w 8
+# Detection de version + CVEs
+an4scan /var/www/magento2 --version
 
-# Detection de version + CVEs uniquement
-python3 an4scan.py /var/www/magento2 --version
+# Scan DB + permissions + fichiers modifies (14 jours)
+an4scan /var/www/magento2 --db --permissions --mtime --mtime-days 14
 
-# Scan DB + permissions + fichiers modifies dans les 14 derniers jours
-python3 an4scan.py /var/www/magento2 --db --permissions --mtime --mtime-days 14
+# Analyse des access logs
+an4scan /var/www/magento2 --logs
+an4scan /var/www/magento2 --logs --log-path /var/log/nginx/access.log
 
-# Analyse des access logs (auto-detection ou chemin specifique)
-python3 an4scan.py /var/www/magento2 --logs
-python3 an4scan.py /var/www/magento2 --logs --log-path /var/log/nginx/access.log
+# Scan YARA avec regles custom
+an4scan /var/www/magento2 --yara --yara-rules /path/to/rules/
 
-# Scan YARA avec regles externes
-python3 an4scan.py /var/www/magento2 --yara --yara-rules /path/to/rules/
-
-# Exclure des chemins (faux positifs connus)
-python3 an4scan.py /var/www/magento2 --whitelist vendor/custom app/code/MyModule
+# Exclure des chemins
+an4scan /var/www/magento2 --whitelist vendor/custom app/code/MyModule
 
 # Sauvegarder le rapport
-python3 an4scan.py /var/www/magento2 --all -o rapport.txt
+an4scan /var/www/magento2 --all -o rapport.txt
 
-# Mode verbose (affiche les erreurs de scan)
-python3 an4scan.py /var/www/magento2 --all -v
+# Mode silencieux (resume une ligne)
+an4scan /var/www/magento2 --all -q
 
-# Mode silencieux (affiche uniquement le resume)
-python3 an4scan.py /var/www/magento2 --all --quiet
-
-# Telecharger/mettre a jour les rulesets YARA communautaires
+# Telecharger les rulesets YARA communautaires
 an4scan --update
 
 # Voir le statut des rulesets installes
@@ -117,31 +122,35 @@ an4scan --status
 ## Options completes
 
 ```
-positional arguments:
   path                    Chemin vers la racine Magento 2
 
-options:
-  -h, --help              Aide
+scan modules:
+  --db                    Scanner la base de donnees
+  --mtime                 Fichiers modifies recemment + integrite core
+  --mtime-days N          Fenetre de temps pour --mtime (defaut: 7)
+  --permissions           Verifier les permissions fichiers
+  --version               Detecter la version et verifier les CVEs connues
+  --logs                  Analyser les access logs
+  --log-path PATH...      Chemin(s) vers les fichiers de log
+  --yara                  Activer le scan YARA (requires yara-python)
+  --yara-rules PATH       Regles YARA supplementaires
+  --all                   Activer tous les modules
+  --deep                  Inclure les suspicions (defaut: menaces confirmees)
+
+output:
   -j, --json              Sortie JSON
-  -s, --severity          Niveau minimum (CRITICAL, HIGH, MEDIUM, LOW, INFO)
-  -w, --workers           Nombre de workers paralleles (defaut: 4)
-  -v, --verbose           Sortie detaillee
-  -o, --output FILE       Sauvegarder le rapport dans un fichier
+  -o, --output FILE       Sauvegarder le rapport
+  -q, --quiet             Resume une ligne uniquement
+  -s, --severity LEVEL    Forcer le niveau minimum (CRITICAL/HIGH/MEDIUM/LOW/INFO)
+  -v, --verbose           Afficher les erreurs de scan
+
+tuning:
+  -w, --workers N         Workers paralleles (defaut: 4)
   --whitelist PATH...     Chemins a exclure du scan
 
-  --db                    Scanner la base de donnees
-  --permissions           Verifier les permissions fichiers
-  --mtime                 Detecter les fichiers core modifies recemment
-  --mtime-days N          Fenetre de temps pour --mtime (defaut: 7 jours)
-  --yara                  Activer le scan YARA
-  --yara-rules PATH       Chemin vers des regles YARA supplementaires
-  --update           Telecharger/MAJ les rulesets YARA communautaires (~/.an4scan/rules/)
-  --status           Afficher le statut des rulesets YARA installes
-  --version         Detecter la version et verifier les CVEs connues
-  --logs                  Analyser les access logs
-  --log-path PATH...      Chemin(s) vers les fichiers de log (auto-detection sinon)
-  --all                   Activer tous les modules
-  -q, --quiet             Mode silencieux (affiche uniquement le resume)
+ruleset management:
+  --update                Telecharger/MAJ les rulesets YARA communautaires
+  --status                Afficher les rulesets YARA installes
 ```
 
 ---

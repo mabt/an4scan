@@ -2586,62 +2586,71 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s /var/www/magento2
-  %(prog)s /var/www/magento2 --json > report.json
-  %(prog)s /var/www/magento2 --severity HIGH --workers 8
-  %(prog)s /var/www/magento2 --all
-  %(prog)s /var/www/magento2 --db --permissions --mtime --mtime-days 14
-  %(prog)s /var/www/magento2 --yara --yara-rules /path/to/rules/
-  %(prog)s /var/www/magento2 --version
-  %(prog)s /var/www/magento2 --logs --log-path /var/log/nginx/access.log
-  %(prog)s /var/www/magento2 --whitelist vendor/custom lib/custom
-  %(prog)s /var/www/magento2 --all --quiet
-  %(prog)s --update
-  %(prog)s --status
+  %(prog)s /var/www/magento2                        # scan confirmed threats only
+  %(prog)s /var/www/magento2 --deep                 # include suspicions
+  %(prog)s /var/www/magento2 --all                  # all modules
+  %(prog)s /var/www/magento2 --all --deep           # full audit
+  %(prog)s /var/www/magento2 --all -q               # summary only
+  %(prog)s /var/www/magento2 -j > report.json       # JSON export
+  %(prog)s --update                                 # download YARA rulesets
+  %(prog)s --status                                 # show installed rulesets
         """,
     )
+    # ── Target ──
     parser.add_argument("path", nargs="?", default=None,
                         help="Path to Magento 2 installation root")
-    parser.add_argument("-j", "--json", action="store_true",
-                        help="Output report in JSON format")
-    parser.add_argument("-s", "--severity", default="LOW",
-                        choices=["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"],
-                        help="Minimum severity to report (default: LOW)")
-    parser.add_argument("-w", "--workers", type=int, default=4,
-                        help="Number of parallel workers (default: 4)")
-    parser.add_argument("--whitelist", nargs="*", default=[],
-                        help="Additional paths to whitelist (relative to Magento root)")
-    parser.add_argument("-v", "--verbose", action="store_true",
-                        help="Verbose output")
-    parser.add_argument("-o", "--output", help="Write report to file")
 
-    # New modules
-    parser.add_argument("--db", action="store_true",
-                        help="Scan database (CMS blocks, config, pages) for injected malware")
-    parser.add_argument("--permissions", action="store_true",
-                        help="Check file/directory permissions (world-writable, SUID/SGID)")
-    parser.add_argument("--mtime", action="store_true",
-                        help="Check for recently modified core files")
-    parser.add_argument("--mtime-days", type=int, default=7,
-                        help="Number of days for mtime check (default: 7)")
-    parser.add_argument("--yara", action="store_true",
-                        help="Enable YARA scanning (requires yara-python)")
-    parser.add_argument("--yara-rules", type=str, default=None,
-                        help="Path to additional YARA rules file or directory")
-    parser.add_argument("--update", action="store_true",
-                        help="Download/update community YARA rulesets to ~/.an4scan/rules/")
-    parser.add_argument("--status", action="store_true",
-                        help="Show status of downloaded YARA rulesets")
-    parser.add_argument("--version", action="store_true",
-                        help="Detect Magento version and check for known CVEs")
-    parser.add_argument("--logs", action="store_true",
-                        help="Analyze access logs for exploit attempts and breach indicators")
-    parser.add_argument("--log-path", nargs="*", default=None,
-                        help="Path(s) to access log files (auto-detected if not specified)")
-    parser.add_argument("--all", action="store_true",
-                        help="Enable all scan modules")
-    parser.add_argument("-q", "--quiet", action="store_true",
-                        help="Quiet mode - only show summary line")
+    # ── Scan modules ──
+    scan = parser.add_argument_group("scan modules")
+    scan.add_argument("--db", action="store_true",
+                      help="Scan database for injected malware")
+    scan.add_argument("--mtime", action="store_true",
+                      help="Detect recently modified core files + integrity check")
+    scan.add_argument("--mtime-days", type=int, default=7,
+                      help="Days window for --mtime (default: 7)")
+    scan.add_argument("--permissions", action="store_true",
+                      help="Check file permissions (world-writable, SUID/SGID)")
+    scan.add_argument("--version", action="store_true",
+                      help="Detect Magento version and check known CVEs")
+    scan.add_argument("--logs", action="store_true",
+                      help="Analyze access logs for exploit attempts")
+    scan.add_argument("--log-path", nargs="*", default=None,
+                      help="Path(s) to access log files (auto-detected if omitted)")
+    scan.add_argument("--yara", action="store_true",
+                      help="Enable YARA scanning (requires yara-python)")
+    scan.add_argument("--yara-rules", type=str, default=None,
+                      help="Path to additional YARA rules file or directory")
+    scan.add_argument("--all", action="store_true",
+                      help="Enable all scan modules")
+    scan.add_argument("--deep", action="store_true",
+                      help="Show all findings including suspicions (default: confirmed threats only)")
+
+    # ── Output ──
+    out = parser.add_argument_group("output")
+    out.add_argument("-j", "--json", action="store_true",
+                     help="Output report in JSON format")
+    out.add_argument("-o", "--output", help="Write report to file")
+    out.add_argument("-q", "--quiet", action="store_true",
+                     help="Quiet mode - only show summary line")
+    out.add_argument("-s", "--severity", default=None,
+                     choices=["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"],
+                     help="Override minimum severity filter")
+    out.add_argument("-v", "--verbose", action="store_true",
+                     help="Verbose output (show scan errors)")
+
+    # ── Tuning ──
+    tuning = parser.add_argument_group("tuning")
+    tuning.add_argument("-w", "--workers", type=int, default=4,
+                        help="Parallel workers (default: 4)")
+    tuning.add_argument("--whitelist", nargs="*", default=[],
+                        help="Paths to exclude (relative to Magento root)")
+
+    # ── Ruleset management ──
+    rules = parser.add_argument_group("ruleset management")
+    rules.add_argument("--update", action="store_true",
+                       help="Download/update community YARA rulesets")
+    rules.add_argument("--status", action="store_true",
+                       help="Show status of installed YARA rulesets")
 
     args = parser.parse_args()
 
@@ -2674,6 +2683,10 @@ Examples:
         args.yara = True
         args.version = True
         args.logs = True
+
+    # Severity: explicit -s wins, otherwise --deep=LOW, default=HIGH
+    if args.severity is None:
+        args.severity = LOW if args.deep else HIGH
 
     scan_path = Path(args.path)
     if not scan_path.exists():
