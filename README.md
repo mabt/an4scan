@@ -15,13 +15,13 @@ Inspire par des outils comme [eComscan](https://sansec.io/ecomscan), AN4SCAN est
 | Module | Flag | Description |
 |--------|------|-------------|
 | **File Scan** | *(toujours actif)* | 60+ signatures regex : skimmers CC, backdoors, webshells, obfuscation, patterns Magento specifiques |
-| **Version + CVEs** | `--version-check` | Detection automatique de la version Magento + base de 25+ CVEs critiques avec patches recommandes |
+| **Version + CVEs** | `--version` | Detection automatique de la version Magento + base de 25+ CVEs critiques avec patches recommandes |
 | **Database Scan** | `--db` | Analyse les tables `core_config_data`, `cms_block`, `cms_page`, `email_template` + verifie les admin users suspects et les cron jobs |
 | **Log Analysis** | `--logs` | Analyse les access logs Apache/Nginx pour detecter les tentatives d'exploitation, brute force admin, injections SQL |
 | **Permission Check** | `--permissions` | Detecte fichiers/dossiers world-writable, SUID/SGID sur scripts, `env.php` world-readable |
 | **Modified Files** | `--mtime` | Compare les dates de modification des fichiers core vs `composer.lock`, detecte les PHP recents dans `pub/media`, `var`, etc. |
 | **YARA Scan** | `--yara` | 7 regles YARA integrees + support de regles externes (Sansec, THOR, custom) |
-| **Integrity Check** | `--integrity` | Verifie les overrides de fichiers core dans `app/code/Magento` |
+| **Integrity Check** | `--mtime` | Verifie les overrides de fichiers core dans `app/code/Magento` (inclus dans --mtime) |
 | **Timeline** | *(automatique)* | Reconstruction chronologique de l'infection a partir des mtimes, logs et findings |
 | **Tout activer** | `--all` | Active tous les modules ci-dessus |
 
@@ -81,7 +81,7 @@ python3 an4scan.py /var/www/magento2 --json > report.json
 python3 an4scan.py /var/www/magento2 -s HIGH -w 8
 
 # Detection de version + CVEs uniquement
-python3 an4scan.py /var/www/magento2 --version-check
+python3 an4scan.py /var/www/magento2 --version
 
 # Scan DB + permissions + fichiers modifies dans les 14 derniers jours
 python3 an4scan.py /var/www/magento2 --db --permissions --mtime --mtime-days 14
@@ -101,6 +101,15 @@ python3 an4scan.py /var/www/magento2 --all -o rapport.txt
 
 # Mode verbose (affiche les erreurs de scan)
 python3 an4scan.py /var/www/magento2 --all -v
+
+# Mode silencieux (affiche uniquement le resume)
+python3 an4scan.py /var/www/magento2 --all --quiet
+
+# Telecharger/mettre a jour les rulesets YARA communautaires
+an4scan --update
+
+# Voir le statut des rulesets installes
+an4scan --status
 ```
 
 ---
@@ -119,24 +128,27 @@ options:
   -v, --verbose           Sortie detaillee
   -o, --output FILE       Sauvegarder le rapport dans un fichier
   --whitelist PATH...     Chemins a exclure du scan
-  --integrity             Verifier l'integrite des fichiers core
+
   --db                    Scanner la base de donnees
   --permissions           Verifier les permissions fichiers
   --mtime                 Detecter les fichiers core modifies recemment
   --mtime-days N          Fenetre de temps pour --mtime (defaut: 7 jours)
   --yara                  Activer le scan YARA
   --yara-rules PATH       Chemin vers des regles YARA supplementaires
-  --version-check         Detecter la version et verifier les CVEs connues
+  --update           Telecharger/MAJ les rulesets YARA communautaires (~/.an4scan/rules/)
+  --status           Afficher le statut des rulesets YARA installes
+  --version         Detecter la version et verifier les CVEs connues
   --logs                  Analyser les access logs
   --log-path PATH...      Chemin(s) vers les fichiers de log (auto-detection sinon)
   --all                   Activer tous les modules
+  -q, --quiet             Mode silencieux (affiche uniquement le resume)
 ```
 
 ---
 
 ## Detection de version et CVEs
 
-Le module `--version-check` :
+Le module `--version` :
 
 1. **Detecte la version** depuis `composer.lock`, `composer.json`, ou le framework Magento
 2. **Identifie l'edition** (Community/Open Source ou Enterprise/Commerce)
@@ -349,36 +361,40 @@ Le module `--db` lit automatiquement les credentials depuis `app/etc/env.php` et
 pip install yara-python
 ```
 
-### Utilisation
+### Rulesets communautaires (recommande)
+
+an4scan peut telecharger automatiquement 5 rulesets communautaires (~1700 fichiers de regles) :
 
 ```bash
-# Regles integrees uniquement (7 regles)
-python3 an4scan.py /var/www/magento2 --yara
+# Telecharger/mettre a jour tous les rulesets
+an4scan --update
 
-# Avec des regles externes (recommande pour forensics)
-python3 an4scan.py /var/www/magento2 --yara --yara-rules /path/to/rules.yar
-
-# Avec un dossier de regles (charge tous les .yar et .yara)
-python3 an4scan.py /var/www/magento2 --yara --yara-rules /etc/yara-rules/
+# Verifier le statut des rulesets installes
+an4scan --status
 ```
 
-### Rulesets externes recommandes
-
-Pour une couverture maximale, telechargez **signature-base** (le plus complet, ~4000 regles) :
-
-```bash
-git clone https://github.com/Neo23x0/signature-base.git /opt/yara-rules
-python3 an4scan.py /var/www/magento2 --yara --yara-rules /opt/yara-rules/yara/
-```
-
-Autres rulesets compatibles :
+Les rulesets sont stockes dans `~/.an4scan/rules/` et charges automatiquement avec `--yara`.
 
 | Ruleset | Contenu |
 |---------|---------|
-| [Neo23x0/signature-base](https://github.com/Neo23x0/signature-base) | Webshells, backdoors, hack tools (~4000 regles) |
-| [Yara-Rules/rules](https://github.com/Yara-Rules/rules) | Malware generique, packers, crypto miners |
-| [reversinglabs/reversinglabs-yara-rules](https://github.com/reversinglabs/reversinglabs-yara-rules) | Malware par famille |
-| [Sansec](https://sansec.io/) | Signatures eComscan (Magento-specifique) |
+| [Sansec/ecomscan](https://github.com/gwillem/magento-malware-scanner) | Signatures Magento-specifique (skimmers, backdoors) |
+| [Mage Security Council](https://github.com/magesec/magesecurityscanner) | YARA rules Magento (standard + deep scan) |
+| [Neo23x0/signature-base](https://github.com/Neo23x0/signature-base) | Webshells, backdoors, hack tools (~700 regles) |
+| [ReversingLabs](https://github.com/reversinglabs/reversinglabs-yara-rules) | Malware par famille (~300 regles) |
+| [Elastic](https://github.com/elastic/protections-artifacts) | Protections cross-platform (~670 regles) |
+
+### Utilisation
+
+```bash
+# Regles integrees uniquement (4 regles binaires)
+an4scan /var/www/magento2 --yara
+
+# Avec rulesets communautaires (telecharger d'abord avec --update)
+an4scan /var/www/magento2 --yara
+
+# Avec des regles custom supplementaires
+an4scan /var/www/magento2 --yara --yara-rules /path/to/custom-rules/
+```
 
 ---
 

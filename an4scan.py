@@ -6,21 +6,25 @@ credit card skimmers, and suspicious code patterns.
 """
 
 import argparse
-import hashlib
 import json
 import os
 import re
+import shutil
 import stat
 import subprocess
 import sys
+import tarfile
 import time
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field, asdict
+from io import BytesIO
 from math import log2
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
+from urllib.request import urlopen, Request
+from urllib.error import URLError
 
 
 # ─── Severity levels ───────────────────────────────────────────────────────────
@@ -176,8 +180,8 @@ SIGNATURES = [
      r"""extract\s*\(\s*(?:\$_GET|\$_POST|\$_REQUEST|\$_COOKIE)""",
      [".php", ".phtml"]),
 
-    ("OB-007", HIGH, "obfuscation",
-     "ionCube/Zend Guard encoded file (may hide malware)",
+    ("OB-007", MEDIUM, "obfuscation",
+     "ionCube/Zend Guard encoded file - verify legitimacy",
      r"""(?:ionCube|ioncube_loader|zend_loader|sg_load|SourceGuardian)""",
      [".php"]),
 
@@ -352,9 +356,9 @@ DB_SIGNATURES = [
      "WebSocket/Beacon exfiltration in DB content",
      r"""(?:new\s+WebSocket|navigator\.sendBeacon|new\s+Image\s*\(\s*\)\.src)\s*[\(=][\s\S]{0,100}(?:https?://|atob)"""),
 
-    ("DBI-009", HIGH, "db_injection",
-     "Suspicious admin path or URL rewrite in core_config_data",
-     r"""(?:admin/url/custom|web/unsecure/base_url|web/secure/base_url)"""),
+    ("DBI-009", MEDIUM, "db_injection",
+     "Suspicious URL rewrite pointing to external domain in core_config_data",
+     r"""(?:web/(?:un)?secure/base_url|admin/url/custom)\s*[=:]\s*['"]?https?://(?!localhost|127\.0\.0\.1)[\w.-]+\.[a-z]{2,}"""),
 
     ("DBI-010", MEDIUM, "db_injection",
      "Inline event handler injection (onload, onerror, etc.)",
@@ -446,7 +450,6 @@ SCANNABLE_EXTENSIONS = {
 # Directories to skip
 SKIP_DIRS = {
     ".git", "node_modules", ".svn", ".hg",
-    "vendor/composer", "vendor/autoload.php",
 }
 
 # Known legitimate paths that may trigger false positives
@@ -645,6 +648,7 @@ class ScanResult:
     version_info: dict = field(default_factory=dict)
     cve_findings: list = field(default_factory=list)
     timeline: list = field(default_factory=list)
+    suspicious_ips: list = field(default_factory=list)
     summary: dict = field(default_factory=dict)
 
 
@@ -783,9 +787,7 @@ class DatabaseScanner:
 
         for table, columns, table_label in targets:
             for col in columns:
-                query = f"SELECT CONCAT('{table_label}:', {col}) FROM `{table}` WHERE 1=1;"
                 try:
-                    # Use a smarter query that only pulls suspicious rows
                     like_patterns = [
                         "<script%", "%eval(%", "%base64_decode(%",
                         "%atob(%", "%document.write(%", "%String.fromCharCode%",
@@ -1033,24 +1035,23 @@ class MtimeChecker:
                 return ref.stat().st_mtime
         return None
 
-    def check(self, check_integrity: bool = False) -> list[Finding]:
+    def check(self) -> list[Finding]:
         findings = []
 
-        # Check for core overrides in app/code/Magento (integrity check)
-        if check_integrity:
-            app_code_magento = self.root / "app" / "code" / "Magento"
-            if app_code_magento.exists():
-                for fpath in app_code_magento.rglob("*"):
-                    if fpath.is_file():
-                        findings.append(Finding(
-                            file_path=str(fpath.relative_to(self.root)),
-                            signature_id="INTEG-001",
-                            severity=MEDIUM,
-                            category="integrity",
-                            description="Core override in app/code/Magento - verify legitimacy",
-                            line_number=0,
-                            line_content="",
-                        ))
+        # Check for core overrides in app/code/Magento
+        app_code_magento = self.root / "app" / "code" / "Magento"
+        if app_code_magento.exists():
+            for fpath in app_code_magento.rglob("*"):
+                if fpath.is_file():
+                    findings.append(Finding(
+                        file_path=str(fpath.relative_to(self.root)),
+                        signature_id="INTEG-001",
+                        severity=MEDIUM,
+                        category="integrity",
+                        description="Core override in app/code/Magento - verify legitimacy",
+                        line_number=0,
+                        line_content="",
+                    ))
 
         if self.reference_time is None:
             if self.verbose:
@@ -1140,6 +1141,153 @@ class MtimeChecker:
         return findings
 
 
+# ─── YARA Ruleset Auto-Updater ─────────────────────────────────────────────────
+
+YARA_RULES_DIR = Path.home() / ".an4scan" / "rules"
+
+YARA_RULESETS = [
+    {
+        "name": "sansec-magento",
+        "description": "Sansec/ecomscan — largest Magento malware signature collection",
+        "url": "https://github.com/gwillem/magento-malware-scanner/archive/refs/heads/master.tar.gz",
+        "strip": 1,
+        "globs": ["build/*.yar", "rules/*.yar"],
+    },
+    {
+        "name": "magesec",
+        "description": "Mage Security Council — Magento YARA rules (standard + deep)",
+        "url": "https://github.com/magesec/magesecurityscanner/archive/refs/heads/master.tar.gz",
+        "strip": 1,
+        "globs": ["*.yar"],
+    },
+    {
+        "name": "signature-base",
+        "description": "Neo23x0 YARA rules — webshells, exploits, malware",
+        "url": "https://github.com/Neo23x0/signature-base/archive/refs/heads/master.tar.gz",
+        "strip": 1,
+        "globs": ["yara/*.yar"],
+    },
+    {
+        "name": "reversinglabs",
+        "description": "ReversingLabs YARA rules — malware families",
+        "url": "https://github.com/reversinglabs/reversinglabs-yara-rules/archive/refs/heads/develop.tar.gz",
+        "strip": 1,
+        "globs": ["yara/**/*.yar", "yara/**/*.yara"],
+    },
+    {
+        "name": "elastic",
+        "description": "Elastic protections — cross-platform malware YARA",
+        "url": "https://github.com/elastic/protections-artifacts/archive/refs/heads/main.tar.gz",
+        "strip": 1,
+        "globs": ["yara/**/*.yar"],
+    },
+]
+
+
+class YaraRuleUpdater:
+    """Download and manage community YARA rulesets."""
+
+    def __init__(self, rules_dir: Path = YARA_RULES_DIR, verbose: bool = False):
+        self.rules_dir = rules_dir
+        self.verbose = verbose
+
+    def update(self, rulesets: Optional[list[str]] = None) -> dict:
+        """Download rulesets. Returns {name: {status, count, error}}."""
+        self.rules_dir.mkdir(parents=True, exist_ok=True)
+        results = {}
+
+        for rs in YARA_RULESETS:
+            name = rs["name"]
+            if rulesets and name not in rulesets:
+                continue
+
+            print(f"  [{name}] Downloading {rs['description']}...")
+            try:
+                count = self._download_ruleset(rs)
+                results[name] = {"status": "ok", "count": count}
+                print(f"  [{name}] {count} rule file(s) installed")
+            except Exception as e:
+                results[name] = {"status": "error", "error": str(e)}
+                print(f"  [{name}] Error: {e}", file=sys.stderr)
+
+        # Write metadata
+        meta_path = self.rules_dir / "meta.json"
+        meta = {}
+        if meta_path.exists():
+            try:
+                meta = json.loads(meta_path.read_text())
+            except Exception:
+                pass
+        for name, info in results.items():
+            if info["status"] == "ok":
+                meta[name] = {
+                    "updated": datetime.now().isoformat(),
+                    "count": info["count"],
+                }
+        meta_path.write_text(json.dumps(meta, indent=2))
+
+        return results
+
+    def _download_ruleset(self, rs: dict) -> int:
+        """Download a tarball, extract matching .yar files, return count."""
+        dest = self.rules_dir / rs["name"]
+        if dest.exists():
+            shutil.rmtree(dest)
+        dest.mkdir(parents=True)
+
+        req = Request(rs["url"], headers={"User-Agent": "an4scan/1.0"})
+        with urlopen(req, timeout=60) as resp:
+            data = resp.read()
+
+        count = 0
+        with tarfile.open(fileobj=BytesIO(data), mode="r:gz") as tar:
+            strip = rs.get("strip", 0)
+            for member in tar.getmembers():
+                if not member.isfile():
+                    continue
+                # Strip leading path components
+                parts = Path(member.name).parts[strip:]
+                if not parts:
+                    continue
+                rel = Path(*parts)
+                # Check if matches any glob pattern
+                if not any(rel.match(g) for g in rs["globs"]):
+                    continue
+                # Extract to dest
+                out_path = dest / rel
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+                f = tar.extractfile(member)
+                if f:
+                    out_path.write_bytes(f.read())
+                    count += 1
+
+        return count
+
+    def get_all_rule_files(self) -> list[Path]:
+        """Return all .yar/.yara files from downloaded rulesets."""
+        if not self.rules_dir.exists():
+            return []
+        files = list(self.rules_dir.rglob("*.yar"))
+        files.extend(self.rules_dir.rglob("*.yara"))
+        return sorted(files)
+
+    def show_status(self):
+        """Print status of downloaded rulesets."""
+        meta_path = self.rules_dir / "meta.json"
+        if not meta_path.exists():
+            print("  No rulesets downloaded yet. Run: an4scan --update")
+            return
+        meta = json.loads(meta_path.read_text())
+        print(f"  Rules directory: {self.rules_dir}")
+        print()
+        for name, info in meta.items():
+            updated = info.get("updated", "?")[:19]
+            count = info.get("count", 0)
+            print(f"  {name:20s}  {count:4d} files  (updated: {updated})")
+        total = len(self.get_all_rule_files())
+        print(f"\n  Total: {total} rule file(s)")
+
+
 # ─── YARA Scanner ──────────────────────────────────────────────────────────────
 
 class YaraScanner:
@@ -1164,32 +1312,49 @@ class YaraScanner:
             return
 
         try:
-            sources = {"builtin": YARA_RULES_SOURCE}
+            compiled_rules = []
+            loaded = 0
+            failed = 0
 
-            # Load external rules if provided
+            # Always load builtin rules
+            try:
+                compiled_rules.append(yara.compile(source=YARA_RULES_SOURCE))
+                loaded += 1
+            except Exception as e:
+                if self.verbose:
+                    print(f"  [YARA] Builtin rules error: {e}", file=sys.stderr)
+
+            # Collect external rule files
+            rule_files = []
             if extra_rules_path:
-                rules_dir = Path(extra_rules_path)
-                if rules_dir.is_file():
-                    sources["external"] = rules_dir.read_text()
-                elif rules_dir.is_dir():
-                    for i, yar_file in enumerate(rules_dir.glob("*.yar")):
-                        try:
-                            sources[f"ext_{i}"] = yar_file.read_text()
-                        except Exception:
-                            pass
-                    for i, yar_file in enumerate(rules_dir.glob("*.yara")):
-                        try:
-                            sources[f"exty_{i}"] = yar_file.read_text()
-                        except Exception:
-                            pass
+                p = Path(extra_rules_path)
+                if p.is_file():
+                    rule_files.append(p)
+                elif p.is_dir():
+                    rule_files.extend(p.rglob("*.yar"))
+                    rule_files.extend(p.rglob("*.yara"))
 
-            self.rules = yara.compile(sources=sources)
-            self.available = True
+            # Auto-load community rulesets from ~/.an4scan/rules/
+            updater = YaraRuleUpdater()
+            rule_files.extend(updater.get_all_rule_files())
+
+            # Compile each file individually, skip failures
+            for yar_file in rule_files:
+                try:
+                    compiled_rules.append(yara.compile(filepath=str(yar_file)))
+                    loaded += 1
+                except Exception:
+                    failed += 1
+
+            if compiled_rules:
+                self.rules = compiled_rules
+                self.available = True
             if self.verbose:
-                print(f"  [YARA] Loaded rules successfully", file=sys.stderr)
+                print(f"  [YARA] Loaded {loaded} ruleset(s), {failed} failed",
+                      file=sys.stderr)
         except Exception as e:
             if self.verbose:
-                print(f"  [YARA] Failed to compile rules: {e}", file=sys.stderr)
+                print(f"  [YARA] Init error: {e}", file=sys.stderr)
 
     def scan_file(self, filepath: str) -> list[Finding]:
         if not self.available or not self.rules:
@@ -1198,10 +1363,12 @@ class YaraScanner:
         findings = []
         rel_path = os.path.relpath(filepath, self.root)
 
-        try:
-            matches = self.rules.match(filepath, timeout=10)
-        except Exception:
-            return findings
+        matches = []
+        for ruleset in self.rules:
+            try:
+                matches.extend(ruleset.match(filepath, timeout=10))
+            except Exception:
+                continue
 
         for match in matches:
             severity = HIGH
@@ -1738,7 +1905,7 @@ class An4Scanner:
                  whitelist: Optional[list] = None, json_output: bool = False,
                  verbose: bool = False, quiet: bool = False,
                  scan_db: bool = False,
-                 check_mtime: bool = False, check_integrity: bool = False,
+                 check_mtime: bool = False,
                  mtime_days: int = 7,
                  check_permissions: bool = False,
                  use_yara: bool = False, yara_rules: Optional[str] = None,
@@ -1753,7 +1920,7 @@ class An4Scanner:
         self.quiet = quiet
         self.scan_db = scan_db
         self.check_mtime = check_mtime
-        self.check_integrity = check_integrity
+
         self.mtime_days = mtime_days
         self.check_permissions = check_permissions
         self.use_yara = use_yara
@@ -1898,7 +2065,7 @@ class An4Scanner:
                 continue
             for i, line in enumerate(lines, 1):
                 if len(line) > 10000:
-                    # For very long lines, check in chunks
+                    # For very long lines, check in chunks to avoid regex backtracking
                     for chunk_start in range(0, len(line), 8000):
                         chunk = line[chunk_start:chunk_start + 10000]
                         if regex.search(chunk):
@@ -1913,18 +2080,17 @@ class An4Scanner:
                                 line_content=snippet,
                             ))
                             break
-                else:
-                    if regex.search(line):
-                        snippet = line[:200].strip()
-                        findings.append(Finding(
-                            file_path=rel_path,
-                            signature_id=sig_id,
-                            severity=severity,
-                            category=category,
-                            description=desc,
-                            line_number=i,
-                            line_content=snippet,
-                        ))
+                elif regex.search(line):
+                    snippet = line[:200].strip()
+                    findings.append(Finding(
+                        file_path=rel_path,
+                        signature_id=sig_id,
+                        severity=severity,
+                        category=category,
+                        description=desc,
+                        line_number=i,
+                        line_content=snippet,
+                    ))
 
         # Entropy check for detecting heavily obfuscated code
         if ext in {".php", ".phtml", ".js"} and len(content) > 500:
@@ -2052,7 +2218,7 @@ class An4Scanner:
                 print(f"  Checking recently modified files ({self.mtime_days} days)...")
             mtime_checker = MtimeChecker(self.path, days=self.mtime_days,
                                          verbose=self.verbose)
-            result.mtime_findings = mtime_checker.check(check_integrity=self.check_integrity)
+            result.mtime_findings = mtime_checker.check()
             if self._show_progress:
                 print(f"  Modified: {len(result.mtime_findings)} finding(s)")
                 print()
@@ -2111,8 +2277,7 @@ class An4Scanner:
                 print(f"  Log findings: {len(log_findings)}")
                 if suspicious_ips:
                     print(f"  Suspicious IPs: {len(suspicious_ips)}")
-            # Store IPs in summary later
-            result.summary["suspicious_ips"] = suspicious_ips
+            result.suspicious_ips = suspicious_ips
             if self._show_progress:
                 print()
 
@@ -2243,6 +2408,7 @@ class An4Scanner:
             "version_info": result.version_info,
             "cve_findings": [asdict(f) for f in result.cve_findings],
             "timeline": result.timeline,
+            "suspicious_ips": result.suspicious_ips,
         }
         print(json.dumps(output, indent=2))
 
@@ -2327,7 +2493,7 @@ class An4Scanner:
             print()
 
         # Suspicious IPs from log analysis
-        suspicious_ips = s.get("suspicious_ips", [])
+        suspicious_ips = result.suspicious_ips
         if suspicious_ips:
             print(f"{BOLD}  TOP SUSPICIOUS IPs (from access logs){RESET}")
             print(f"  {'─' * 40}")
@@ -2426,13 +2592,16 @@ Examples:
   %(prog)s /var/www/magento2 --all
   %(prog)s /var/www/magento2 --db --permissions --mtime --mtime-days 14
   %(prog)s /var/www/magento2 --yara --yara-rules /path/to/rules/
-  %(prog)s /var/www/magento2 --version-check
+  %(prog)s /var/www/magento2 --version
   %(prog)s /var/www/magento2 --logs --log-path /var/log/nginx/access.log
   %(prog)s /var/www/magento2 --whitelist vendor/custom lib/custom
   %(prog)s /var/www/magento2 --all --quiet
+  %(prog)s --update
+  %(prog)s --status
         """,
     )
-    parser.add_argument("path", help="Path to Magento 2 installation root")
+    parser.add_argument("path", nargs="?", default=None,
+                        help="Path to Magento 2 installation root")
     parser.add_argument("-j", "--json", action="store_true",
                         help="Output report in JSON format")
     parser.add_argument("-s", "--severity", default="LOW",
@@ -2444,8 +2613,6 @@ Examples:
                         help="Additional paths to whitelist (relative to Magento root)")
     parser.add_argument("-v", "--verbose", action="store_true",
                         help="Verbose output")
-    parser.add_argument("--integrity", action="store_true",
-                        help="Check Magento core file integrity")
     parser.add_argument("-o", "--output", help="Write report to file")
 
     # New modules
@@ -2461,7 +2628,11 @@ Examples:
                         help="Enable YARA scanning (requires yara-python)")
     parser.add_argument("--yara-rules", type=str, default=None,
                         help="Path to additional YARA rules file or directory")
-    parser.add_argument("--version-check", action="store_true",
+    parser.add_argument("--update", action="store_true",
+                        help="Download/update community YARA rulesets to ~/.an4scan/rules/")
+    parser.add_argument("--status", action="store_true",
+                        help="Show status of downloaded YARA rulesets")
+    parser.add_argument("--version", action="store_true",
                         help="Detect Magento version and check for known CVEs")
     parser.add_argument("--logs", action="store_true",
                         help="Analyze access logs for exploit attempts and breach indicators")
@@ -2474,14 +2645,34 @@ Examples:
 
     args = parser.parse_args()
 
+    # Standalone YARA management commands (no path required)
+    if args.update:
+        print(f"\n{BOLD}  AN4SCAN — YARA Ruleset Updater{RESET}\n")
+        updater = YaraRuleUpdater(verbose=args.verbose)
+        updater.update()
+        print()
+        updater.show_status()
+        print()
+        sys.exit(0)
+
+    if args.status:
+        print(f"\n{BOLD}  AN4SCAN — YARA Ruleset Status{RESET}\n")
+        updater = YaraRuleUpdater()
+        updater.show_status()
+        print()
+        sys.exit(0)
+
+    # Path is required for scanning
+    if not args.path:
+        parser.error("path is required for scanning")
+
     # --all enables everything
     if args.all:
         args.db = True
         args.permissions = True
         args.mtime = True
         args.yara = True
-        args.integrity = True
-        args.version_check = True
+        args.version = True
         args.logs = True
 
     scan_path = Path(args.path)
@@ -2491,10 +2682,6 @@ Examples:
     if not scan_path.is_dir():
         print(f"Error: path is not a directory: {args.path}", file=sys.stderr)
         sys.exit(1)
-
-    # --integrity implies --mtime (integrity check is now part of MtimeChecker)
-    if args.integrity and not args.mtime:
-        args.mtime = True
 
     scanner = An4Scanner(
         path=args.path,
@@ -2506,12 +2693,11 @@ Examples:
         quiet=args.quiet,
         scan_db=args.db,
         check_mtime=args.mtime,
-        check_integrity=args.integrity,
         mtime_days=args.mtime_days,
         check_permissions=args.permissions,
         use_yara=args.yara,
         yara_rules=args.yara_rules,
-        check_version=args.version_check,
+        check_version=args.version,
         analyze_logs=args.logs,
         log_paths=args.log_path,
     )
