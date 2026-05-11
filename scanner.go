@@ -196,6 +196,37 @@ var imageExts = map[string]bool{
 	".ico": true, ".bmp": true, ".webp": true, ".svg": true,
 }
 
+// isLegitImagePath returns true for image paths where PHP-like bytes in binary data are expected false positives.
+func isLegitImagePath(rel string) bool {
+	legitPrefixes := []string{
+		"pub/media/catalog/",
+		"media/catalog/",
+		"pub/media/wysiwyg/",
+		"media/wysiwyg/",
+		"pub/media/magefan_blog/",
+		"media/magefan_blog/",
+		"pub/media/amasty/",
+		"media/amasty/",
+		"pub/media/aw_rma/",
+		"media/aw_rma/",
+		"pub/media/tmp/",
+		"media/tmp/",
+		"pub/media/.thumbs",
+		"media/.thumbs",
+		"pub/media/blog/",
+		"media/blog/",
+		"wp-content/uploads/",
+		"img/",
+		"images/",
+	}
+	for _, p := range legitPrefixes {
+		if strings.HasPrefix(rel, p) || strings.Contains(rel, "/"+p) {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *An4Scanner) scanFile(path string) ([]Finding, []SuspiciousFile) {
 	var findings []Finding
 	var suspicious []SuspiciousFile
@@ -229,14 +260,16 @@ func (s *An4Scanner) scanFile(path string) ([]Finding, []SuspiciousFile) {
 
 	ext := strings.ToLower(filepath.Ext(path))
 
-	// PHP in image check
+	// PHP in image check — skip known media directories (catalog images, RMA uploads, etc.)
 	if imageExts[ext] {
-		if bytes.Contains(data, []byte("<?php")) || bytes.Contains(data, []byte("<?=")) {
-			findings = append(findings, Finding{
-				FilePath: rel, SignatureID: "SF-006", Severity: HIGH,
-				Category: "suspicious", Description: "PHP code embedded in image/media file",
-				LineContent: "(binary file)",
-			})
+		if !isLegitImagePath(rel) {
+			if bytes.Contains(data, []byte("<?php")) || bytes.Contains(data, []byte("<?=")) {
+				findings = append(findings, Finding{
+					FilePath: rel, SignatureID: "SF-006", Severity: HIGH,
+					Category: "suspicious", Description: "PHP code embedded in image/media file",
+					LineContent: "(binary file)",
+				})
+			}
 		}
 		return findings, suspicious
 	}
@@ -286,8 +319,9 @@ func (s *An4Scanner) scanFile(path string) ([]Finding, []SuspiciousFile) {
 		}
 	}
 
-	// Entropy check
-	if (ext == ".php" || ext == ".phtml" || ext == ".js") && len(content) > 500 {
+	// Entropy check — skip minified JS files (naturally high entropy)
+	isMinified := strings.HasSuffix(rel, ".min.js") || strings.HasSuffix(rel, ".min.css")
+	if !isMinified && (ext == ".php" || ext == ".phtml" || ext == ".js") && len(content) > 500 {
 		for i, line := range lines {
 			stripped := strings.TrimSpace(line)
 			if len(stripped) > 1000 {

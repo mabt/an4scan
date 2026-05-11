@@ -146,7 +146,7 @@ var Signatures = []SignatureDef{
 		[]string{".php"}},
 	{"MG-005", CRITICAL, "magento",
 		"Known Magento malware (Magecart Group patterns)",
-		`(?i)(?:ccDecode|ccGet|getFormData|skimData|exfilData|sendCC|grabCC|sniffCC)`,
+		`(?i)(?:ccDecode|ccGet|skimData|exfilData|sendCC|grabCC|sniffCC)`,
 		[]string{".js", ".php", ".phtml"}},
 	{"MG-006", HIGH, "magento",
 		"Suspicious inline script in Magento CMS/static content",
@@ -551,12 +551,28 @@ var WhitelistPaths = []string{
 	"vendor/stripe",
 	"vendor/amzn",
 	"vendor/klarna",
+	"vendor/phpseclib",
+	"vendor/paragonie",
+	"vendor/giggsey",
+	"vendor/ramsey",
+	"vendor/web-token",
+	"vendor/aws",
+	"vendor/m2e",
 	// Magento static/frontend build tooling
 	"lib/web/jquery",
 	"lib/web/knockoutjs",
 	"lib/web/requirejs",
 	"lib/web/mage",
 	"lib/web/tiny_mce",
+	"lib/web/hugerte",
+	// Known third-party JS libs (minified, trigger FP on skimmer patterns)
+	"app/code/Plumrocket/Base/view/base/web/js/lib/",
+	"app/code/Aheadworks/",
+	"app/code/Olegnax/MegaMenu/view/frontend/web/js/velocity.min.js",
+	// LitExtension (legitimate password migration module)
+	"app/code/LitExtension/",
+	// WeltPixel (legitimate license check with hex strings)
+	"app/code/WeltPixel/Backend/",
 	// Magento pub (legitimate PHP entry points)
 	"pub/index.php",
 	"pub/cron.php",
