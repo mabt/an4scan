@@ -4,10 +4,6 @@ Single-binary security scanner for **Magento 2**, **WordPress**, and **PrestaSho
 
 No dependencies. Just download and run.
 
-<p align="center">
-  <img src="demo.gif" alt="AN4SCAN Demo" width="800">
-</p>
-
 ## Install
 
 ### One-liner (Linux x86_64)
