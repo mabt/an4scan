@@ -25,6 +25,12 @@ func findLogs(root string) []string {
 		"/var/log/nginx/access.log",
 	}
 
+	// Auto-discover /home/*/logs/apache/ (common hosting layout)
+	homeDirs, _ := filepath.Glob("/home/*/logs/apache")
+	for _, d := range homeDirs {
+		candidates = append(candidates, d)
+	}
+
 	var found []string
 	for _, c := range candidates {
 		info, err := os.Stat(c)
@@ -34,7 +40,8 @@ func findLogs(root string) []string {
 		if info.IsDir() {
 			entries, _ := os.ReadDir(c)
 			for _, e := range entries {
-				if !e.IsDir() && strings.Contains(strings.ToLower(e.Name()), "access") {
+				name := strings.ToLower(e.Name())
+				if !e.IsDir() && (strings.Contains(name, "access") || strings.HasSuffix(name, ".log")) {
 					found = append(found, filepath.Join(c, e.Name()))
 				}
 			}
@@ -100,6 +107,16 @@ func analyzeLogs(root string, logPaths []string, cmsType CMSType, verbose bool) 
 	ipCounter := make(map[string]*ipData)
 	adminBruteforce := make(map[string]int)
 
+	// Track successful (200) access to suspicious paths
+	type shellAccess struct {
+		IP     string
+		Path   string
+		Status string
+		Date   string
+	}
+	var successfulShellAccess []shellAccess
+	shellPathRe := regexp.MustCompile(`(?i)(?:custom_options|upload|tmp|media)/.*\.(?:php|phtml|pht|php[3-7])`)
+
 	logRe := regexp.MustCompile(`^(\S+)\s+\S+\s+\S+\s+\[([^\]]+)\]\s+"(\S+)\s+(\S+)\s+\S+"\s+(\d+)\s+(\d+)`)
 	adminPostRe := regexp.MustCompile(`(?i)POST\s+\S*/admin\S*(?:/dashboard|/auth/login|/index/index|/admin_html)`)
 
@@ -140,6 +157,16 @@ func analyzeLogs(root string, logPaths []string, cmsType CMSType, verbose bool) 
 			// Admin brute force
 			if adminPostRe.MatchString(fullRequest) {
 				adminBruteforce[ip]++
+			}
+
+			// Track successful access to shell/PHP files in upload dirs
+			if shellPathRe.MatchString(path) {
+				if statusCode == "200" {
+					date := m[2]
+					successfulShellAccess = append(successfulShellAccess, shellAccess{
+						IP: ip, Path: path, Status: statusCode, Date: date,
+					})
+				}
 			}
 
 			// Exploit patterns
@@ -203,6 +230,44 @@ func analyzeLogs(root string, logPaths []string, cmsType CMSType, verbose bool) 
 				LineContent: fmt.Sprintf("IP: %s, Attempts: %d", ip, count),
 			})
 		}
+	}
+
+	// Successful shell access = confirmed exploitation
+	if len(successfulShellAccess) > 0 {
+		// Group by IP
+		shellByIP := make(map[string][]shellAccess)
+		for _, sa := range successfulShellAccess {
+			shellByIP[sa.IP] = append(shellByIP[sa.IP], sa)
+		}
+		for ip, accesses := range shellByIP {
+			sample := accesses[0]
+			paths := []string{}
+			seen := map[string]bool{}
+			for _, a := range accesses {
+				if !seen[a.Path] && len(paths) < 5 {
+					paths = append(paths, a.Path)
+					seen[a.Path] = true
+				}
+			}
+			findings = append(findings, Finding{
+				FilePath:    "ACCESS_LOG",
+				SignatureID: "LOG-200",
+				Severity:    CRITICAL,
+				Category:    "log_exploit",
+				Description: fmt.Sprintf("CONFIRMED EXPLOITATION: %d successful (HTTP 200) access to PHP shell from %s", len(accesses), ip),
+				LineContent: fmt.Sprintf("IP: %s | Paths: %s | Date: %s", ip, strings.Join(paths, ", "), sample.Date),
+			})
+		}
+	} else {
+		// No 200 on shells = good news, add as INFO-level finding
+		findings = append(findings, Finding{
+			FilePath:    "ACCESS_LOG",
+			SignatureID: "LOG-200",
+			Severity:    INFO,
+			Category:    "log_exploit",
+			Description: "No successful (HTTP 200) access to PHP files in upload/media directories detected",
+			LineContent: "All shell access attempts returned 403/404 — no confirmed exploitation",
+		})
 	}
 
 	// Build suspicious IP list
