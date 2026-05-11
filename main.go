@@ -181,75 +181,106 @@ Flags:
 		os.Stdout = f
 	}
 
-	scanner := NewScanner(scanPath)
-	scanner.Workers = *flagWorkers
-	scanner.MinSeverity = minSeverity
-	scanner.Whitelist = whitelist
-	scanner.JSONOutput = *flagJSON
-	scanner.Verbose = *flagVerbose
-	scanner.Quiet = *flagQuiet
-	scanner.ScanDB = *flagDB
-	scanner.CheckMtime = *flagMtime
-	scanner.MtimeDays = *flagMtimeDays
-	scanner.CheckPermissions = *flagPerms
-	scanner.UseYara = *flagYara
-	scanner.YaraRulesPath = *flagYaraRules
-	scanner.CheckVersion = *flagVersion
-	scanner.AnalyzeLogs = *flagLogs
-	scanner.LogPaths = logPaths
-	scanner.CheckPlugins = *flagPlugins
-	scanner.CheckIntegrity = *flagIntegrity
-	scanner.HTMLOutput = *flagHTML
-	scanner.DiffPath = *flagDiff
-	scanner.SaveScan = *flagSave
-	scanner.Init()
+	// Build a template scanner with all flags (used for both single and multi-site)
+	tmpl := NewScanner(scanPath)
+	tmpl.Workers = *flagWorkers
+	tmpl.MinSeverity = minSeverity
+	tmpl.Whitelist = whitelist
+	tmpl.JSONOutput = *flagJSON
+	tmpl.Verbose = *flagVerbose
+	tmpl.Quiet = *flagQuiet
+	tmpl.ScanDB = *flagDB
+	tmpl.CheckMtime = *flagMtime
+	tmpl.MtimeDays = *flagMtimeDays
+	tmpl.CheckPermissions = *flagPerms
+	tmpl.UseYara = *flagYara
+	tmpl.YaraRulesPath = *flagYaraRules
+	tmpl.CheckVersion = *flagVersion
+	tmpl.AnalyzeLogs = *flagLogs
+	tmpl.LogPaths = logPaths
+	tmpl.CheckPlugins = *flagPlugins
+	tmpl.CheckIntegrity = *flagIntegrity
+	tmpl.HTMLOutput = *flagHTML
+	tmpl.DiffPath = *flagDiff
+	tmpl.SaveScan = *flagSave
 
-	result := scanner.Scan()
-	printReport(result, *flagJSON, *flagQuiet)
+	// Discover sites: if path is a CMS root, single site. Otherwise, find all CMS sites.
+	sites := discoverSites(scanPath, 3)
 
-	// HTML report
-	if *flagHTML != "" {
-		if err := writeHTMLReport(result, *flagHTML); err != nil {
-			fmt.Fprintf(os.Stderr, "Error writing HTML report: %v\n", err)
-		} else {
-			fmt.Printf("  HTML report saved to: %s\n\n", *flagHTML)
-		}
+	if len(sites) == 0 {
+		fmt.Fprintf(os.Stderr, "No CMS installation detected under %s\n", scanPath)
+		os.Exit(1)
 	}
 
-	// Save scan for future diffing
-	if *flagSave {
-		savedPath, err := saveScanResult(result, scanPath)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error saving scan: %v\n", err)
-		} else {
-			fmt.Printf("  Scan saved to: %s\n\n", savedPath)
-		}
-	}
+	// Single site mode
+	if len(sites) == 1 {
+		scanner := NewScanner(sites[0].Path)
+		*scanner = *tmpl
+		scanner.Path = sites[0].Path
+		scanner.Init()
 
-	// Diff with previous scan
-	if *flagDiff != "" {
-		diffPath := *flagDiff
-		if diffPath == "auto" {
-			diffPath = findPreviousScan(scanPath)
-			if diffPath == "" {
-				fmt.Fprintln(os.Stderr, "No previous scan found. Run with -save first.")
+		result := scanner.Scan()
+		printReport(result, *flagJSON, *flagQuiet)
+
+		if *flagHTML != "" {
+			if err := writeHTMLReport(result, *flagHTML); err != nil {
+				fmt.Fprintf(os.Stderr, "Error writing HTML report: %v\n", err)
+			} else if !*flagQuiet {
+				fmt.Printf("  HTML report saved to: %s\n\n", *flagHTML)
 			}
 		}
-		if diffPath != "" {
-			diff, err := diffScans(result, diffPath)
+
+		if *flagSave {
+			savedPath, err := saveScanResult(result, sites[0].Path)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error computing diff: %v\n", err)
-			} else {
-				printDiffReport(diff)
+				fmt.Fprintf(os.Stderr, "Error saving scan: %v\n", err)
+			} else if !*flagQuiet {
+				fmt.Printf("  Scan saved to: %s\n\n", savedPath)
 			}
+		}
+
+		if *flagDiff != "" {
+			diffPath := *flagDiff
+			if diffPath == "auto" {
+				diffPath = findPreviousScan(sites[0].Path)
+				if diffPath == "" {
+					fmt.Fprintln(os.Stderr, "No previous scan found. Run with -save first.")
+				}
+			}
+			if diffPath != "" {
+				diff, err := diffScans(result, diffPath)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Error computing diff: %v\n", err)
+				} else {
+					printDiffReport(diff)
+				}
+			}
+		}
+
+		if result.Summary.BySeverity[CRITICAL] > 0 {
+			os.Exit(2)
+		}
+		if result.Summary.BySeverity[HIGH] > 0 {
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
+	// Multi-site mode
+	multiResult := runMultiSiteScan(sites, tmpl)
+	printMultiSiteReport(multiResult, *flagJSON)
+
+	if *flagHTML != "" {
+		writeMultiSiteHTML(multiResult, *flagHTML)
+		if !*flagQuiet {
+			fmt.Printf("  HTML reports saved with prefix: %s\n\n", *flagHTML)
 		}
 	}
 
-	// Exit code based on severity
-	if result.Summary.BySeverity[CRITICAL] > 0 {
+	if multiResult.Summary.BySeverity[CRITICAL] > 0 {
 		os.Exit(2)
 	}
-	if result.Summary.BySeverity[HIGH] > 0 {
+	if multiResult.Summary.BySeverity[HIGH] > 0 {
 		os.Exit(1)
 	}
 }
