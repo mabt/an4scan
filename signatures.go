@@ -267,13 +267,13 @@ var DBSignatures = []DBSignatureDef{
 
 var SuspiciousFilenames = []SuspiciousFilenameDef{
 	{`(?i)(?:^|/)\.(?!htaccess|gitignore|gitkeep|well-known)[a-zA-Z0-9]{1,3}\.php$`, HIGH, "Hidden PHP file (dot-prefixed)"},
-	{`(?i)(?:^|/)(?:cmd|shell|wso|c99|r57|b374k|webshell|backdoor|hack|exploit)\.php$`, CRITICAL, "Known malware filename"},
-	{`(?i)(?:^|/)(?:upload|media|static|pub)/.+\.(?:php|phtml|php[3-7]|pht)$`, HIGH, "PHP file in content directory"},
+	{`(?i)(?:^|/)(?:cmd|wso|c99|r57|b374k|webshell|backdoor|hack|exploit)\.php$`, CRITICAL, "Known malware filename"},
+	{`(?i)^(?:pub/)?media/.+\.(?:php|phtml|php[3-7]|pht)$`, HIGH, "PHP file in media directory"},
+	{`(?i)^(?:pub/)?static/.+\.(?:php|phtml|php[3-7]|pht)$`, HIGH, "PHP file in static directory"},
 	{`(?i)(?:^|/)(?:wp-login|wp-admin|wp-config|xmlrpc)\.php$`, MEDIUM, "WordPress file in Magento (likely malware)"},
-	{`(?i)(?:^|/)(?:adminer|phpmyadmin|phpinfo|info|test|debug|phpunit)\.php$`, MEDIUM, "Potentially dangerous utility file"},
+	{`(?i)(?:^|/)(?:adminer|phpmyadmin|phpinfo|info|test|debug)\.php$`, MEDIUM, "Potentially dangerous utility file"},
 	{`(?i)(?:^|/)\.(?:php|phtml|pht)[0-9]*$`, HIGH, "Hidden PHP variant file"},
-	{`(?i)(?:^|/)(?:cache|tmp|log|var)/.+\.php$`, HIGH, "PHP file in temp/cache directory"},
-	{`(?i)(?:^|/)(?:images|img|css|js|fonts)/.+\.php$`, HIGH, "PHP file in static asset directory"},
+	{`(?i)^(?:pub/)?(?:upload|tmp)/.+\.php$`, HIGH, "PHP file in upload/tmp directory"},
 	{`(?i)\.php\.(jpg|png|gif|ico|txt|bak|old|swp)$`, HIGH, "PHP file with fake extension"},
 }
 
@@ -526,8 +526,7 @@ var WhitelistPaths = []string{
 	"lib/internal/Magento/Framework/Interception",
 	"lib/internal/Magento/Framework/ObjectManager",
 	// Generated / compiled code
-	"generated/code",
-	"generated/metadata",
+	"generated/",
 	"var/generation",
 	// Vendor libs that legitimately use eval, base64, exec, etc.
 	"vendor/magento",
@@ -558,6 +557,12 @@ var WhitelistPaths = []string{
 	"lib/web/requirejs",
 	"lib/web/mage",
 	"lib/web/tiny_mce",
+	// Magento pub (legitimate PHP entry points)
+	"pub/index.php",
+	"pub/cron.php",
+	"pub/get.php",
+	"pub/health_check.php",
+	"pub/errors/",
 	// Static deployed assets (compiled from vendor)
 	"pub/static/frontend",
 	"pub/static/adminhtml",

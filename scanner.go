@@ -143,13 +143,19 @@ func (s *An4Scanner) shouldSkipDir(name string) bool {
 }
 
 func (s *An4Scanner) isWhitelisted(relPath string) bool {
-	for _, wp := range WhitelistPaths {
+	// Check against all whitelist paths (both built-in and user-provided)
+	allWL := append(WhitelistPaths, s.Whitelist...)
+	// Also add CMS-specific whitelist
+	allWL = append(allWL, getWhitelistForCMS(s.cms.Type)...)
+
+	for _, wp := range allWL {
+		// Direct prefix match (standard case: scan root = CMS root)
 		if strings.HasPrefix(relPath, wp) {
 			return true
 		}
-	}
-	for _, wp := range s.Whitelist {
-		if strings.HasPrefix(relPath, wp) {
+		// Also check with path separator prefix (scan root is parent of CMS root)
+		// e.g. relPath="br_prod/vendor/magento/..." matches wp="vendor/magento"
+		if strings.Contains(relPath, "/"+wp) {
 			return true
 		}
 	}
@@ -196,18 +202,18 @@ func (s *An4Scanner) scanFile(path string) ([]Finding, []SuspiciousFile) {
 
 	rel, _ := filepath.Rel(s.Path, path)
 
-	// Check filename patterns
+	// Skip whitelisted for everything (including filename patterns)
+	if s.isWhitelisted(rel) {
+		return findings, suspicious
+	}
+
+	// Check filename patterns (after whitelist)
 	for _, p := range s.compiledFilenames {
 		if p.Regex.MatchString(rel) {
 			suspicious = append(suspicious, SuspiciousFile{
 				File: rel, Severity: p.Severity, Reason: p.Reason,
 			})
 		}
-	}
-
-	// Skip whitelisted
-	if s.isWhitelisted(rel) {
-		return findings, suspicious
 	}
 
 	// Check size
