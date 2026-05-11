@@ -1,14 +1,22 @@
+# Build artifacts
+an4scan
+dist/
+*.exe
+
+# Python (legacy)
 __pycache__/
 *.pyc
 *.pyo
-.env
+
+# IDE
+.vscode/
+.idea/
 *.swp
 *.swo
 *~
-.vscode/
-.idea/
-dist/
-build/
-*.egg-info/
+
+# Reports
 report.json
+report.html
 rapport.txt
+.an4scan/

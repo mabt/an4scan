@@ -1,0 +1,162 @@
+package main
+
+// ─── PrestaShop-specific signatures ─────────────────────────────────────────
+
+var PrestaShopSignatures = []SignatureDef{
+	// ━━━ PS Backdoors ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+	{"PS-BD-001", CRITICAL, "backdoor",
+		"PrestaShop module backdoor - eval of user input",
+		`(?i)(?:eval|assert|system|exec)\s*\(\s*(?:base64_decode\s*\(\s*)?\$_(?:POST|GET|REQUEST)`,
+		[]string{".php"}},
+	{"PS-BD-002", CRITICAL, "backdoor",
+		"Rogue PrestaShop module with shell access",
+		`(?is)class\s+\w+\s+extends\s+Module[\s\S]{0,500}(?:eval|shell_exec|system|passthru|proc_open)\s*\(`,
+		[]string{".php"}},
+	{"PS-BD-003", HIGH, "backdoor",
+		"PrestaShop override controller tampered with backdoor",
+		`(?is)class\s+\w+(?:Core|Controller)\s+extends[\s\S]{0,500}(?:eval|base64_decode|gzinflate)\s*\(`,
+		[]string{".php"}},
+	{"PS-BD-004", CRITICAL, "backdoor",
+		"File upload via PrestaShop module (arbitrary write)",
+		`(?is)move_uploaded_file[\s\S]{0,200}(?:modules/|override/|classes/)`,
+		[]string{".php"}},
+
+	// ━━━ PS Skimmers ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+	{"PS-SK-001", CRITICAL, "skimmer",
+		"PrestaShop checkout payment form interception",
+		`(?is)(?:payment|order-opc|checkout)[\s\S]{0,200}(?:addEventListener|onsubmit)[\s\S]{0,300}(?:fetch|XMLHttp|sendBeacon|new\s+Image)`,
+		[]string{".js", ".tpl", ".php"}},
+	{"PS-SK-002", CRITICAL, "skimmer",
+		"PrestaShop payment module credential theft",
+		`(?is)(?:PaymentModule|validateOrder|hookPayment)[\s\S]{0,500}(?:curl_exec|file_get_contents\s*\(\s*['"]https?://)`,
+		[]string{".php"}},
+	{"PS-SK-003", CRITICAL, "skimmer",
+		"Malicious JavaScript in PrestaShop Smarty template",
+		`(?is)\{literal\}[\s\S]{0,100}<script[\s\S]{0,500}(?:atob|eval|document\.write|btoa)[\s\S]{0,300}(?:card|payment|cc_|cvv)`,
+		[]string{".tpl"}},
+
+	// ━━━ PS-Specific Malware ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+	{"PS-MW-001", CRITICAL, "malware",
+		"PrestaShop settings.inc.php credential exfiltration",
+		`(?is)(?:_DB_NAME_|_DB_USER_|_DB_PASSWD_|_COOKIE_KEY_|_COOKIE_IV_)[\s\S]{0,300}(?:curl|file_get_contents|mail\s*\()`,
+		[]string{".php"}},
+	{"PS-MW-002", HIGH, "malware",
+		"PrestaShop admin backdoor user creation",
+		`(?is)(?:Employee|employee)[\s\S]{0,200}(?:add\(\)|save\(\)|INSERT\s+INTO)[\s\S]{0,200}(?:id_profile\s*=\s*1|SuperAdmin)`,
+		[]string{".php"}},
+	{"PS-MW-003", HIGH, "malware",
+		"Malicious PrestaShop hook registration",
+		`(?is)registerHook[\s\S]{0,100}(?:displayPayment|actionPaymentConfirmation|displayHeader)[\s\S]{0,300}(?:eval|base64|curl_exec)`,
+		[]string{".php"}},
+	{"PS-MW-004", HIGH, "malware",
+		"PrestaShop SEO spam injection in CMS content",
+		`(?is)(?:viagra|cialis|pharmacy|casino|poker|payday.?loan)[\s\S]{0,200}(?:display\s*:\s*none|visibility\s*:\s*hidden)`,
+		[]string{".php", ".tpl", ".html"}},
+	{"PS-MW-005", CRITICAL, "malware",
+		"PrestaShop customer data mass exfiltration",
+		`(?is)(?:ps_customer|ps_address|ps_orders)[\s\S]{0,200}(?:SELECT\s+\*)[\s\S]{0,200}(?:curl|file_get_contents|fopen|mail)`,
+		[]string{".php"}},
+
+	// ━━━ PS File Anomalies ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+	{"PS-FA-001", HIGH, "suspicious",
+		"PHP file in PrestaShop upload/img directory",
+		`<\?(?:php|=)`,
+		[]string{".php"}},
+	{"PS-FA-002", HIGH, "suspicious",
+		"Suspicious override class (verify legitimacy)",
+		`(?is)class\s+\w+\s+extends\s+\w+Core\b`,
+		[]string{".php"}},
+}
+
+var PrestaShopSuspiciousFilenames = []SuspiciousFilenameDef{
+	{`(?i)(?:^|/)img/.+\.php$`, HIGH, "PHP file in img directory"},
+	{`(?i)(?:^|/)upload/.+\.php$`, HIGH, "PHP file in upload directory"},
+	{`(?i)(?:^|/)download/.+\.php$`, HIGH, "PHP file in download directory"},
+	{`(?i)(?:^|/)modules/.+/(?:shell|backdoor|hack|wso|c99)\.php$`, CRITICAL, "Known malware in modules"},
+	{`(?i)(?:^|/)override/classes/.+\.php$`, MEDIUM, "Override class (verify legitimacy)"},
+	{`(?i)(?:^|/)themes/.+\.php\.`, HIGH, "PHP file with double extension in themes"},
+	{`(?i)(?:^|/)cache/.+\.php$`, HIGH, "PHP file in cache directory"},
+}
+
+// ─── PrestaShop CVEs ────────────────────────────────────────────────────────
+
+var PrestaShopCVEs = []CVEDef{
+	// 2025
+	{"8.2.0", "CVE-2025-23088", CRITICAL,
+		"SQL injection in product search (unauthenticated)",
+		"Upgrade to 8.2.1+"},
+	// 2024
+	{"8.1.7", "CVE-2024-36680", CRITICAL,
+		"SQL Injection in pk_faq module (ACTIVELY EXPLOITED)",
+		"Remove/update pk_faq module"},
+	{"8.1.5", "CVE-2024-34716", CRITICAL,
+		"XSS to RCE via file upload in back office",
+		"Upgrade to 8.1.6+"},
+	{"8.1.4", "CVE-2024-33271", HIGH,
+		"Server-Side Request Forgery via import function",
+		"Upgrade to 8.1.5+"},
+	{"8.1.3", "CVE-2024-24305", HIGH,
+		"SQL injection in carrier module",
+		"Upgrade to 8.1.4+"},
+	// 2023
+	{"8.1.1", "CVE-2023-46819", CRITICAL,
+		"Path traversal to RCE via module upload",
+		"Upgrade to 8.1.2+"},
+	{"8.0.4", "CVE-2023-39526", CRITICAL,
+		"SQL injection and arbitrary file write (ACTIVELY EXPLOITED)",
+		"Upgrade to 8.0.5+ or 8.1.1+"},
+	{"8.0.3", "CVE-2023-30839", CRITICAL,
+		"SQL filter bypass to write arbitrary files (ACTIVELY EXPLOITED)",
+		"Upgrade to 8.0.4+"},
+	{"1.7.8.9", "CVE-2023-30838", CRITICAL,
+		"Stored XSS via Smarty cache to RCE (ACTIVELY EXPLOITED)",
+		"Upgrade to 8.0.4+ / 1.7.8.10+"},
+	{"1.7.8.8", "CVE-2023-25169", HIGH,
+		"SQL injection in product search",
+		"Upgrade to 1.7.8.9+ or 8.0+"},
+	// 2022
+	{"1.7.8.7", "CVE-2022-36408", CRITICAL,
+		"Remote Code Execution via SQL Manager (ACTIVELY EXPLOITED IN THE WILD)",
+		"Upgrade to 1.7.8.8+ / Delete SQL Manager if unused"},
+	{"1.7.8.6", "CVE-2022-31181", CRITICAL,
+		"SQL injection in product storage cache (ACTIVELY EXPLOITED)",
+		"Upgrade to 1.7.8.7+"},
+	{"1.7.8.5", "CVE-2022-22733", HIGH,
+		"Stored XSS via customer group name",
+		"Upgrade to 1.7.8.6+"},
+	// Older critical
+	{"1.7.7.8", "CVE-2021-36748", CRITICAL,
+		"Blind SQL injection in search filters (ACTIVELY EXPLOITED)",
+		"Upgrade to 1.7.8+"},
+	{"1.7.7.0", "CVE-2020-15162", CRITICAL,
+		"Remote Code Execution via file upload",
+		"Upgrade to 1.7.7.1+"},
+	{"1.6.1.24", "CVE-2020-5250", CRITICAL,
+		"Remote Code Execution in dashboard (1.6.x)",
+		"Upgrade to 1.7.x+"},
+}
+
+// ─── PrestaShop log patterns ────────────────────────────────────────────────
+
+var PrestaShopLogPatterns = []LogExploitPatternDef{
+	{"PSLOG-001", HIGH, "log_exploit",
+		"PrestaShop admin brute force",
+		`(?i)POST\s+\S*(?:admin\w*/index\.php\?controller=AdminLogin|/admin/login)`,
+		""},
+	{"PSLOG-002", HIGH, "log_exploit",
+		"PrestaShop module exploit attempt",
+		`(?i)(?:GET|POST)\s+\S*modules/\S*\.php\?`,
+		`(?i)(?:UNION|SELECT|eval|base64|system|exec)`},
+	{"PSLOG-003", HIGH, "log_exploit",
+		"Direct access to PHP file in upload/img directory",
+		`(?i)GET\s+\S*(?:upload|img)/\S*\.php`,
+		""},
+	{"PSLOG-004", CRITICAL, "log_exploit",
+		"PrestaShop SQL Manager RCE attempt (CVE-2022-36408)",
+		`(?i)(?:GET|POST)\s+\S*(?:ajax-tab|AdminRequestSql|sql_manager)`,
+		""},
+	{"PSLOG-005", HIGH, "log_exploit",
+		"PrestaShop API token brute force",
+		`(?i)(?:GET|POST)\s+\S*api/\S*\?ws_key=`,
+		""},
+}
