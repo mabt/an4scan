@@ -240,36 +240,11 @@ func printTextReport(result *ScanResult) {
 		fmt.Println()
 	}
 
-	// Timeline
+	// Timeline (grouped by day)
 	if len(result.Timeline) > 0 {
 		fmt.Printf("%s  INFECTION TIMELINE%s\n", Bold, Reset)
 		fmt.Printf("  %s\n", strings.Repeat("─", 40))
-		typeIcons := map[string]string{
-			"reference":       "·",
-			"file_modified":   "~",
-			"malware_file":    "!",
-			"exploit_attempt": "→",
-			"suspicious_admin": "⊕",
-		}
-		for _, e := range result.Timeline {
-			ts := e.Timestamp
-			if len(ts) > 19 {
-				ts = ts[:19]
-			}
-			icon := typeIcons[e.Type]
-			if icon == "" {
-				icon = "?"
-			}
-			color := severityColors[e.Severity]
-			desc := e.Description
-			if len(desc) > 80 {
-				desc = desc[:80]
-			}
-			fmt.Printf("  %s%s%s  %s%s%s %s\n", Dim, ts, Reset, color, icon, Reset, desc)
-			if e.File != "" {
-				fmt.Printf("  %s%s%s%s\n", Dim, strings.Repeat(" ", 21), e.File, Reset)
-			}
-		}
+		printGroupedTimeline(result.Timeline)
 		fmt.Println()
 	}
 
@@ -297,6 +272,86 @@ func hasModuleFindings(modules map[string]int) bool {
 		}
 	}
 	return false
+}
+
+// printGroupedTimeline groups timeline events by day, collapsing repetitive entries.
+func printGroupedTimeline(events []TimelineEvent) {
+	typeIcons := map[string]string{
+		"reference": "·", "file_modified": "~", "malware_file": "!",
+		"exploit_attempt": "→", "suspicious_admin": "⊕",
+	}
+
+	// Group events by day + type + description
+	type dayGroup struct {
+		Day     string
+		Type    string
+		Icon    string
+		Severity string
+		Desc    string
+		Files   []string
+		Count   int
+		FirstTS string
+	}
+
+	var groups []dayGroup
+	var current *dayGroup
+
+	for _, e := range events {
+		day := ""
+		if len(e.Timestamp) >= 10 {
+			day = e.Timestamp[:10]
+		}
+
+		// Same day + same type + same description → merge
+		if current != nil && current.Day == day && current.Type == e.Type && current.Desc == e.Description {
+			current.Count++
+			if len(current.Files) < 3 && e.File != "" {
+				current.Files = append(current.Files, e.File)
+			}
+			continue
+		}
+
+		// New group
+		icon := typeIcons[e.Type]
+		if icon == "" {
+			icon = "?"
+		}
+		groups = append(groups, dayGroup{
+			Day: day, Type: e.Type, Icon: icon, Severity: e.Severity,
+			Desc: e.Description, Count: 1, FirstTS: e.Timestamp,
+		})
+		current = &groups[len(groups)-1]
+		if e.File != "" {
+			current.Files = append(current.Files, e.File)
+		}
+	}
+
+	for _, g := range groups {
+		color := severityColors[g.Severity]
+		ts := g.Day
+		if len(g.FirstTS) >= 16 {
+			ts = g.FirstTS[:16]
+		}
+
+		if g.Count == 1 {
+			fmt.Printf("  %s%s%s  %s%s%s %s\n", Dim, ts, Reset, color, g.Icon, Reset, g.Desc)
+			if len(g.Files) > 0 {
+				fmt.Printf("  %s%s%s%s\n", Dim, strings.Repeat(" ", 19), g.Files[0], Reset)
+			}
+		} else {
+			desc := g.Desc
+			if len(desc) > 60 {
+				desc = desc[:60]
+			}
+			fmt.Printf("  %s%s%s  %s%s%s %s (%d)\n", Dim, g.Day, Reset, color, g.Icon, Reset, desc, g.Count)
+			for _, f := range g.Files {
+				fmt.Printf("  %s%s%s%s\n", Dim, strings.Repeat(" ", 19), f, Reset)
+			}
+			if g.Count > len(g.Files) {
+				fmt.Printf("  %s%s... and %d more%s\n", Dim, strings.Repeat(" ", 19), g.Count-len(g.Files), Reset)
+			}
+		}
+	}
 }
 
 // printGroupedFindings groups findings by signature ID + description and shows count + sample files.
