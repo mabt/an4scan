@@ -115,15 +115,11 @@ func printTextReport(result *ScanResult) {
 		fmt.Println()
 	}
 
-	// Suspicious files
+	// Suspicious files (grouped by reason)
 	if len(result.SuspiciousFiles) > 0 {
 		fmt.Printf("%s  SUSPICIOUS FILES%s\n", Bold, Reset)
 		fmt.Printf("  %s\n", strings.Repeat("─", 40))
-		for _, sf := range result.SuspiciousFiles {
-			color := severityColors[sf.Severity]
-			fmt.Printf("  %s[%-8s]%s %s\n", color, sf.Severity, Reset, sf.File)
-			fmt.Printf("           %s%s%s\n", Dim, sf.Reason, Reset)
-		}
+		printGroupedSuspicious(result.SuspiciousFiles)
 		fmt.Println()
 	}
 
@@ -240,28 +236,7 @@ func printTextReport(result *ScanResult) {
 		}
 		fmt.Printf("%s  %s%s\n", Bold, g.Title, Reset)
 		fmt.Printf("  %s\n", strings.Repeat("─", 40))
-
-		currentSev := ""
-		for _, f := range g.Findings {
-			if f.Severity != currentSev {
-				currentSev = f.Severity
-				color := severityColors[f.Severity]
-				fmt.Printf("\n  %s%s── %s ──%s\n", color, Bold, f.Severity, Reset)
-			}
-			color := severityColors[f.Severity]
-			fmt.Printf("\n  %s[%s]%s %s\n", color, f.SignatureID, Reset, f.Description)
-			fmt.Printf("  %sFile: %s:%d%s\n", Dim, f.FilePath, f.LineNumber, Reset)
-			if f.LineContent != "" {
-				content := f.LineContent
-				if len(content) > 120 {
-					content = content[:120]
-				}
-				fmt.Printf("  %sCode: %s%s\n", Dim, content, Reset)
-			}
-			if f.Context != "" {
-				fmt.Printf("  %sContext: %s%s\n", Dim, f.Context, Reset)
-			}
-		}
+		printGroupedFindings(g.Findings)
 		fmt.Println()
 	}
 
@@ -322,4 +297,123 @@ func hasModuleFindings(modules map[string]int) bool {
 		}
 	}
 	return false
+}
+
+// printGroupedFindings groups findings by signature ID + description and shows count + sample files.
+func printGroupedFindings(findings []Finding) {
+	type group struct {
+		SignatureID string
+		Severity    string
+		Description string
+		Sample      Finding
+		Files       []string
+		Count       int
+	}
+
+	order := []string{}
+	groups := map[string]*group{}
+
+	for _, f := range findings {
+		key := f.SignatureID + "|" + f.Description
+		if g, ok := groups[key]; ok {
+			g.Count++
+			if len(g.Files) < 3 {
+				g.Files = append(g.Files, fmt.Sprintf("%s:%d", f.FilePath, f.LineNumber))
+			}
+		} else {
+			order = append(order, key)
+			groups[key] = &group{
+				SignatureID: f.SignatureID,
+				Severity:    f.Severity,
+				Description: f.Description,
+				Sample:      f,
+				Files:       []string{fmt.Sprintf("%s:%d", f.FilePath, f.LineNumber)},
+				Count:       1,
+			}
+		}
+	}
+
+	currentSev := ""
+	for _, key := range order {
+		g := groups[key]
+		if g.Severity != currentSev {
+			currentSev = g.Severity
+			color := severityColors[g.Severity]
+			fmt.Printf("\n  %s%s── %s ──%s\n", color, Bold, g.Severity, Reset)
+		}
+		color := severityColors[g.Severity]
+
+		if g.Count == 1 {
+			fmt.Printf("\n  %s[%s]%s %s\n", color, g.SignatureID, Reset, g.Description)
+			fmt.Printf("  %sFile: %s%s\n", Dim, g.Files[0], Reset)
+			if g.Sample.LineContent != "" {
+				content := g.Sample.LineContent
+				if len(content) > 120 {
+					content = content[:120]
+				}
+				fmt.Printf("  %sCode: %s%s\n", Dim, content, Reset)
+			}
+		} else {
+			fmt.Printf("\n  %s[%s]%s %s %s(%d files)%s\n", color, g.SignatureID, Reset, g.Description, Dim, g.Count, Reset)
+			for _, file := range g.Files {
+				fmt.Printf("  %s  %s%s\n", Dim, file, Reset)
+			}
+			if g.Count > len(g.Files) {
+				fmt.Printf("  %s  ... and %d more%s\n", Dim, g.Count-len(g.Files), Reset)
+			}
+			if g.Sample.LineContent != "" {
+				content := g.Sample.LineContent
+				if len(content) > 120 {
+					content = content[:120]
+				}
+				fmt.Printf("  %sCode: %s%s\n", Dim, content, Reset)
+			}
+		}
+	}
+}
+
+// printGroupedSuspicious groups suspicious files by reason.
+func printGroupedSuspicious(files []SuspiciousFile) {
+	type group struct {
+		Severity string
+		Reason   string
+		Files    []string
+		Count    int
+	}
+
+	order := []string{}
+	groups := map[string]*group{}
+
+	for _, sf := range files {
+		key := sf.Severity + "|" + sf.Reason
+		if g, ok := groups[key]; ok {
+			g.Count++
+			if len(g.Files) < 3 {
+				g.Files = append(g.Files, sf.File)
+			}
+		} else {
+			order = append(order, key)
+			groups[key] = &group{
+				Severity: sf.Severity, Reason: sf.Reason,
+				Files: []string{sf.File}, Count: 1,
+			}
+		}
+	}
+
+	for _, key := range order {
+		g := groups[key]
+		color := severityColors[g.Severity]
+		if g.Count == 1 {
+			fmt.Printf("  %s[%-8s]%s %s\n", color, g.Severity, Reset, g.Files[0])
+			fmt.Printf("           %s%s%s\n", Dim, g.Reason, Reset)
+		} else {
+			fmt.Printf("  %s[%-8s]%s %s %s(%d files)%s\n", color, g.Severity, Reset, g.Reason, Dim, g.Count, Reset)
+			for _, f := range g.Files {
+				fmt.Printf("           %s%s%s\n", Dim, f, Reset)
+			}
+			if g.Count > len(g.Files) {
+				fmt.Printf("           %s... and %d more%s\n", Dim, g.Count-len(g.Files), Reset)
+			}
+		}
+	}
 }
