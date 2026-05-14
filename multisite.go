@@ -121,14 +121,14 @@ func runMultiSiteScan(sites []CMSSite, scanner *An4Scanner) *MultiSiteResult {
 			fmt.Printf("  %s\n\n", strings.Repeat("─", 50))
 		}
 
-		// Create a scanner for this site
+		// Create a scanner for this site (quiet scan, we handle output)
 		s := NewScanner(site.Path)
 		s.Workers = scanner.Workers
 		s.MinSeverity = scanner.MinSeverity
 		s.Whitelist = scanner.Whitelist
 		s.JSONOutput = scanner.JSONOutput
 		s.Verbose = scanner.Verbose
-		s.Quiet = scanner.Quiet
+		s.Quiet = true // suppress individual scan output, we print reports ourselves
 		s.ScanDB = scanner.ScanDB
 		s.CheckMtime = scanner.CheckMtime
 		s.MtimeDays = scanner.MtimeDays
@@ -147,8 +147,10 @@ func runMultiSiteScan(sites []CMSSite, scanner *An4Scanner) *MultiSiteResult {
 			Path: site.Path, CMS: site.CMS, ScanResult: scanResult,
 		})
 
-		// Per-site quick summary
-		if showProgress {
+		// Per-site detailed report (not just summary)
+		if showProgress && !scanner.Quiet {
+			printReport(scanResult, false, false)
+		} else if showProgress {
 			sr := scanResult.Summary
 			total := sr.TotalFindings + sr.TotalSuspiciousFiles
 			crit := sr.BySeverity[CRITICAL]
