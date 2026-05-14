@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"sort"
 	"strings"
 )
 
@@ -47,222 +46,113 @@ func printJSONReport(result *ScanResult) {
 
 func printTextReport(result *ScanResult) {
 	s := result.Summary
-
-	fmt.Printf("%s%s\n", Bold, strings.Repeat("═", 60))
-	fmt.Println("  SCAN REPORT")
-	fmt.Printf("%s%s\n", strings.Repeat("═", 60), Reset)
-	fmt.Printf("  Path:     %s\n", result.ScanPath)
 	cms := result.CMSInfo
-	if cms.Type != CMSUnknown {
-		fmt.Printf("  CMS:      %s %s", cms.Name, cms.Version)
-		if cms.Edition != "" {
-			fmt.Printf(" (%s)", cms.Edition)
-		}
-		fmt.Println()
-		if cms.EOL != "" {
-			fmt.Printf("  %s⚠ %s%s\n", severityColors[CRITICAL], cms.EOL, Reset)
-		}
-	}
-	fmt.Printf("  Duration: %.2fs\n", result.DurationSeconds)
-	fmt.Printf("  Files:    %d scanned\n\n", result.TotalFilesScanned)
-
-	// Module breakdown
-	if hasModuleFindings(s.Modules) {
-		fmt.Printf("%s  MODULES%s\n", Bold, Reset)
-		fmt.Printf("  %s\n", strings.Repeat("─", 40))
-		for mod, count := range s.Modules {
-			if count > 0 {
-				fmt.Printf("    %-20s: %d finding(s)\n", mod, count)
-			}
-		}
-		fmt.Println()
-	}
-
-	// Summary
-	fmt.Printf("%s  SUMMARY%s\n", Bold, Reset)
-	fmt.Printf("  %s\n", strings.Repeat("─", 40))
 	total := s.TotalFindings + s.TotalSuspiciousFiles
+
+	// Header: one compact block
+	fmt.Printf("\n  %s%s%s  ", Bold, result.ScanPath, Reset)
+	if cms.Type != CMSUnknown {
+		fmt.Printf("%s %s", cms.Name, cms.Version)
+	}
+	fmt.Printf("  %s(%d files, %.1fs)%s\n", Dim, result.TotalFilesScanned, result.DurationSeconds, Reset)
+	if cms.EOL != "" {
+		fmt.Printf("  %s⚠ %s%s\n", severityColors[CRITICAL], cms.EOL, Reset)
+	}
+
 	if total == 0 {
 		fmt.Printf("  \033[92m✓ No threats detected%s\n\n", Reset)
 		return
 	}
 
-	fmt.Printf("  Total findings:     %d\n", total)
-	fmt.Printf("  Affected files:     %d\n\n", s.AffectedFiles)
-
+	// Severity summary on one line
+	fmt.Print("  ")
 	for _, sev := range []string{CRITICAL, HIGH, MEDIUM, LOW, INFO} {
-		count := s.BySeverity[sev]
-		if count > 0 {
-			fmt.Printf("  %s  %-10s: %d%s\n", severityColors[sev], sev, count, Reset)
+		if count := s.BySeverity[sev]; count > 0 {
+			fmt.Printf("%s%d %s%s  ", severityColors[sev], count, sev, Reset)
 		}
 	}
 	fmt.Println()
 
-	if len(s.ByCategory) > 0 {
-		fmt.Println("  By category:")
-		type catCount struct {
-			Cat   string
-			Count int
-		}
-		var cats []catCount
-		for cat, count := range s.ByCategory {
-			cats = append(cats, catCount{cat, count})
-		}
-		sort.Slice(cats, func(i, j int) bool { return cats[i].Count > cats[j].Count })
-		for _, cc := range cats {
-			fmt.Printf("    %-25s: %d\n", cc.Cat, cc.Count)
-		}
-		fmt.Println()
-	}
-
-	// Suspicious files (grouped by reason)
+	// Suspicious files (grouped)
 	if len(result.SuspiciousFiles) > 0 {
-		fmt.Printf("%s  SUSPICIOUS FILES%s\n", Bold, Reset)
-		fmt.Printf("  %s\n", strings.Repeat("─", 40))
+		fmt.Printf("\n%s  SUSPICIOUS FILES%s\n", Bold, Reset)
 		printGroupedSuspicious(result.SuspiciousFiles)
-		fmt.Println()
 	}
 
-	// CMS version info (detailed, when --version is used)
-	if len(result.CVEFindings) > 0 && cms.Version != "" {
-		fmt.Printf("%s  %s VERSION DETAILS%s\n", Bold, strings.ToUpper(string(cms.Type)), Reset)
-		fmt.Printf("  %s\n", strings.Repeat("─", 40))
-		fmt.Printf("    CMS:      %s\n", cms.Name)
-		fmt.Printf("    Version:  %s\n", cms.Version)
-		if cms.Edition != "" {
-			fmt.Printf("    Edition:  %s\n", cms.Edition)
-		}
-		fmt.Printf("    Source:   %s\n", cms.Source)
-		if cms.EOL != "" {
-			fmt.Printf("    %s⚠ %s%s\n", severityColors[CRITICAL], cms.EOL, Reset)
-		}
-		fmt.Println()
-	}
-
-	// CVE findings
+	// CVE findings (compact)
 	if len(result.CVEFindings) > 0 {
-		fmt.Printf("%s  KNOWN VULNERABILITIES (CVEs)%s\n", Bold, Reset)
-		fmt.Printf("  %s\n", strings.Repeat("─", 40))
+		fmt.Printf("\n%s  CVEs%s\n", Bold, Reset)
 		for _, f := range result.CVEFindings {
 			color := severityColors[f.Severity]
-			fmt.Printf("  %s[%-8s] %s%s\n", color, f.Severity, f.SignatureID, Reset)
-			fmt.Printf("           %s\n", f.Description)
-			fmt.Printf("           %s%s%s\n", Dim, f.LineContent, Reset)
+			fmt.Printf("  %s%-8s%s %s — %s\n", color, f.Severity, Reset, f.SignatureID, f.Description)
 		}
-		fmt.Println()
 	}
 
-	// Plugin vulnerabilities
+	// Plugin vulnerabilities (compact)
 	if len(result.PluginFindings) > 0 {
-		fmt.Printf("%s  VULNERABLE PLUGINS / MODULES%s\n", Bold, Reset)
-		fmt.Printf("  %s\n", strings.Repeat("─", 40))
+		fmt.Printf("\n%s  VULNERABLE PLUGINS%s\n", Bold, Reset)
 		for _, pf := range result.PluginFindings {
 			color := severityColors[pf.Severity]
-			fmt.Printf("  %s[%-8s] %s%s v%s — %s\n", color, pf.Severity, Reset, pf.Plugin, pf.Version, pf.CVEID)
-			fmt.Printf("           %s\n", pf.Description)
-			fmt.Printf("           %sFix: %s%s\n", Dim, pf.Fix, Reset)
+			fmt.Printf("  %s%-8s%s %s v%s — %s %s(%s)%s\n", color, pf.Severity, Reset, pf.Plugin, pf.Version, pf.CVEID, Dim, pf.Fix, Reset)
 		}
-		fmt.Println()
 	}
 
-	// Installed plugins summary
-	if len(result.Plugins) > 0 {
-		fmt.Printf("%s  INSTALLED PLUGINS / MODULES (%d)%s\n", Bold, len(result.Plugins), Reset)
-		fmt.Printf("  %s\n", strings.Repeat("─", 40))
-		for _, p := range result.Plugins {
-			ver := p.Version
-			if ver == "" {
-				ver = "?"
-			}
-			fmt.Printf("    %s%-35s%s v%-12s %s\n", Dim, p.Name, Reset, ver, p.Type)
-		}
-		fmt.Println()
-	}
-
-	// Integrity results
+	// Integrity (one line)
 	if result.IntegrityResult.Checked > 0 {
 		ir := result.IntegrityResult
-		fmt.Printf("%s  CORE FILE INTEGRITY%s\n", Bold, Reset)
-		fmt.Printf("  %s\n", strings.Repeat("─", 40))
-		fmt.Printf("    Checked: %d files\n", ir.Checked)
-		if len(ir.Modified) > 0 {
-			fmt.Printf("    %sModified: %d files%s\n", severityColors[HIGH], len(ir.Modified), Reset)
+		if len(ir.Modified) > 0 || len(ir.Unknown) > 0 {
+			fmt.Printf("\n%s  INTEGRITY%s  %d checked, %s%d modified%s, %s%d unknown%s\n",
+				Bold, Reset, ir.Checked,
+				severityColors[HIGH], len(ir.Modified), Reset,
+				severityColors[MEDIUM], len(ir.Unknown), Reset)
 		}
-		if len(ir.Unknown) > 0 {
-			fmt.Printf("    %sUnknown:  %d files%s\n", severityColors[MEDIUM], len(ir.Unknown), Reset)
-		}
-		if len(ir.Missing) > 0 {
-			fmt.Printf("    Missing:  %d files\n", len(ir.Missing))
-		}
-		if len(ir.Modified) == 0 && len(ir.Unknown) == 0 {
-			fmt.Printf("    \033[92m✓ All core files match expected checksums%s\n", Reset)
-		}
-		fmt.Println()
 	}
 
-	// Suspicious IPs
+	// Suspicious IPs (compact)
 	if len(result.SuspiciousIPs) > 0 {
-		fmt.Printf("%s  TOP SUSPICIOUS IPs (from access logs)%s\n", Bold, Reset)
-		fmt.Printf("  %s\n", strings.Repeat("─", 40))
-		limit := 10
+		fmt.Printf("\n%s  SUSPICIOUS IPs%s\n", Bold, Reset)
+		limit := 5
 		if len(result.SuspiciousIPs) < limit {
 			limit = len(result.SuspiciousIPs)
 		}
 		for _, ip := range result.SuspiciousIPs[:limit] {
-			fmt.Printf("    %s%-18s%s %d hits | Patterns: %s\n",
-				severityColors[HIGH], ip.IP, Reset, ip.HitCount,
-				strings.Join(ip.PatternsMatched, ", "))
+			fmt.Printf("  %-18s %d hits  %s%s%s\n", ip.IP, ip.HitCount, Dim, strings.Join(ip.PatternsMatched, ", "), Reset)
 		}
-		fmt.Println()
+		if len(result.SuspiciousIPs) > limit {
+			fmt.Printf("  %s... and %d more%s\n", Dim, len(result.SuspiciousIPs)-limit, Reset)
+		}
 	}
 
-	// Detailed findings by group
-	groups := []struct {
-		Title    string
-		Findings []Finding
-	}{
-		{"DETAILED FINDINGS (File Scan)", result.Findings},
-		{"DATABASE FINDINGS", result.DBFindings},
-		{"PERMISSION FINDINGS", result.PermissionFindings},
-		{"RECENTLY MODIFIED FILES", result.MtimeFindings},
-		{"INTEGRITY FINDINGS", result.IntegrityFindings},
-		{"YARA FINDINGS", result.YaraFindings},
-		{"ACCESS LOG FINDINGS", result.LogFindings},
-	}
+	// All findings combined
+	allFindings := append([]Finding{}, result.Findings...)
+	allFindings = append(allFindings, result.DBFindings...)
+	allFindings = append(allFindings, result.PermissionFindings...)
+	allFindings = append(allFindings, result.MtimeFindings...)
+	allFindings = append(allFindings, result.IntegrityFindings...)
+	allFindings = append(allFindings, result.YaraFindings...)
+	allFindings = append(allFindings, result.LogFindings...)
 
-	for _, g := range groups {
-		if len(g.Findings) == 0 {
-			continue
-		}
-		fmt.Printf("%s  %s%s\n", Bold, g.Title, Reset)
-		fmt.Printf("  %s\n", strings.Repeat("─", 40))
-		printGroupedFindings(g.Findings)
-		fmt.Println()
+	if len(allFindings) > 0 {
+		fmt.Printf("\n%s  FINDINGS%s\n", Bold, Reset)
+		printGroupedFindings(allFindings)
 	}
 
 	// Timeline (grouped by day)
 	if len(result.Timeline) > 0 {
-		fmt.Printf("%s  INFECTION TIMELINE%s\n", Bold, Reset)
-		fmt.Printf("  %s\n", strings.Repeat("─", 40))
+		fmt.Printf("\n%s  TIMELINE%s\n", Bold, Reset)
 		printGroupedTimeline(result.Timeline)
-		fmt.Println()
 	}
-
-	fmt.Printf("%s%s%s\n", Bold, strings.Repeat("═", 60), Reset)
 
 	// Risk assessment
 	crit := s.BySeverity[CRITICAL]
 	high := s.BySeverity[HIGH]
 	if crit > 0 {
-		fmt.Printf("\n  %s%s⚠  HIGH RISK - %d critical finding(s) detected!\n", severityColors[CRITICAL], Bold, crit)
-		fmt.Printf("  Immediate investigation recommended.%s\n", Reset)
+		fmt.Printf("\n  %s%s⚠ %d critical — immediate action needed%s\n\n", severityColors[CRITICAL], Bold, crit, Reset)
 	} else if high > 0 {
-		fmt.Printf("\n  %s⚠  ELEVATED RISK - %d high severity finding(s) detected.\n", severityColors[HIGH], high)
-		fmt.Printf("  Review recommended.%s\n", Reset)
-	} else if total > 0 {
-		fmt.Printf("\n  %s△  LOW-MEDIUM RISK - Review findings for false positives.%s\n", severityColors[MEDIUM], Reset)
+		fmt.Printf("\n  %s⚠ %d high — review recommended%s\n\n", severityColors[HIGH], high, Reset)
+	} else {
+		fmt.Println()
 	}
-	fmt.Println()
 }
 
 func hasModuleFindings(modules map[string]int) bool {
