@@ -14,6 +14,14 @@ func checkPermissions(magentoRoot string, verbose bool) []Finding {
 		if err != nil {
 			return nil
 		}
+
+		// Ignore symbolic links. Their permission bits are always lrwxrwxrwx
+		// on Linux and are not enforced by the kernel, so reporting them as
+		// world-writable would be a false positive.
+		if d.Type()&os.ModeSymlink != 0 {
+			return nil
+		}
+
 		rel, _ := filepath.Rel(magentoRoot, path)
 
 		if d.IsDir() {
