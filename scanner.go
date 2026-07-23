@@ -48,6 +48,7 @@ type An4Scanner struct {
 	YaraRulesPath    string
 	NoAutoUpdate     bool
 	NoCache          bool
+	CacheDir         string
 	CheckVersion     bool
 	AnalyzeLogs      bool
 	CheckPlugins     bool
@@ -603,7 +604,7 @@ func (s *An4Scanner) Scan() *ScanResult {
 	// Incremental cache: skip files unchanged since their last clean scan
 	var cache *scanCache
 	if !s.NoCache {
-		cache = loadScanCache(s.Path, s.cacheKey())
+		cache = loadScanCache(s.CacheDir, s.Path, s.cacheKey())
 	}
 
 	// Parallel file scan

@@ -65,6 +65,7 @@ func main() {
 	flagNoUpdate := flag.Bool("no-update", false, "Skip automatic YARA ruleset update")
 	flagNice := flag.Bool("nice", false, "Gentle scan: lowest CPU/disk priority + 1 worker (for production servers)")
 	flagNoCache := flag.Bool("no-cache", false, "Disable incremental scan cache (rescan all files)")
+	flagCacheDir := flag.String("cache-dir", "", "Base directory for the incremental cache (default: outside the scanned tree — /var/lib/an4scan/cache as root, else ~/.cache/an4scan)")
 
 	// Automation
 	flagCron := flag.Bool("cron", false, "Cron mode: silent, only report findings NEW since last scan")
@@ -98,7 +99,7 @@ func main() {
 						"severity": true, "s": true, "workers": true, "w": true,
 						"output": true, "o": true, "whitelist": true,
 						"log-path": true, "yara-rules": true, "mtime-days": true,
-						"html": true, "diff": true, "webhook": true,
+						"html": true, "diff": true, "webhook": true, "cache-dir": true,
 					}
 					if needsVal[name] && i+1 < len(args) {
 						i++
@@ -256,6 +257,7 @@ Flags:
 	tmpl.YaraRulesPath = *flagYaraRules
 	tmpl.NoAutoUpdate = *flagNoUpdate
 	tmpl.NoCache = *flagNoCache
+	tmpl.CacheDir = *flagCacheDir
 	tmpl.CheckVersion = *flagVersion
 	tmpl.AnalyzeLogs = *flagLogs
 	tmpl.LogPaths = logPaths

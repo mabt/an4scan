@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/gob"
+	"fmt"
 	"hash/fnv"
 	"os"
 	"path/filepath"
@@ -50,11 +51,45 @@ func (s *An4Scanner) cacheKey() string {
 	return string(rune(0)) + string(h.Sum(nil))
 }
 
-func loadScanCache(root, key string) *scanCache {
+// defaultCacheBase returns the base directory for the incremental cache when no
+// --cache-dir is given. It is deliberately OUTSIDE any scanned tree: an4scan
+// often runs as root against client directories (e.g. Capistrano releases/),
+// and a cache written in-tree would be root-owned and block the deploy user's
+// cleanup. Root gets a system path; otherwise the user cache dir.
+func defaultCacheBase() string {
+	if os.Geteuid() == 0 {
+		return "/var/lib/an4scan/cache"
+	}
+	if x := os.Getenv("XDG_CACHE_HOME"); x != "" {
+		return filepath.Join(x, "an4scan")
+	}
+	if h, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(h, ".cache", "an4scan")
+	}
+	return filepath.Join(os.TempDir(), "an4scan-cache")
+}
+
+// cachePathFor returns the on-disk location of the incremental cache for a given
+// scan root. The cache lives under a base dir (cacheDir override, else
+// defaultCacheBase) in a subdirectory keyed by the absolute scan path, so
+// multi-site scans keep separate caches without ever writing inside the target.
+func cachePathFor(cacheDir, scanRoot string) string {
+	abs, err := filepath.Abs(scanRoot)
+	if err != nil {
+		abs = scanRoot
+	}
+	base := cacheDir
+	if base == "" {
+		base = defaultCacheBase()
+	}
+	return filepath.Join(base, fmt.Sprintf("%016x", pathHash(abs)), "filecache.gob")
+}
+
+func loadScanCache(cacheDir, root, key string) *scanCache {
 	c := &scanCache{
 		Key:     key,
 		Entries: make(map[uint64][2]int64),
-		path:    filepath.Join(root, ".an4scan", "filecache.gob"),
+		path:    cachePathFor(cacheDir, root),
 	}
 	f, err := os.Open(c.path)
 	if err != nil {
