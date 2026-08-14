@@ -101,7 +101,6 @@ func checkMtime(root string, days int, verbose bool) []Finding {
 		filepath.Join(root, "pub", "media"),
 		filepath.Join(root, "pub", "static"),
 		filepath.Join(root, "var"),
-		filepath.Join(root, "generated"),
 	}
 
 	recentCutoff := time.Now().Add(-time.Duration(days) * 24 * time.Hour)
