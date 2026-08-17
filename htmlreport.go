@@ -192,6 +192,7 @@ tr:hover { background: #161b22; }
 	writeHTMLFindingsTable(w, "File Scan Findings", result.Findings)
 	writeHTMLFindingsTable(w, "Database Findings", result.DBFindings)
 	writeHTMLFindingsTable(w, "Permission Findings", result.PermissionFindings)
+	writeHTMLFindingsTable(w, "Recently Modified File Findings", result.MtimeFindings)
 	writeHTMLFindingsTable(w, "Integrity Findings", result.IntegrityFindings)
 	writeHTMLFindingsTable(w, "YARA Findings", result.YaraFindings)
 	writeHTMLFindingsTable(w, "Access Log Findings", result.LogFindings)

@@ -96,12 +96,14 @@ func checkMtime(root string, days int, verbose bool) []Finding {
 		})
 	}
 
-	// Recently created PHP files in sensitive dirs
+	// Recently created PHP files in sensitive dirs.
+	// generated/ is excluded: setup:di:compile rewrites it wholesale on every
+	// deploy, so it floods MTIME-002 and drowns real hits in pub/media and var.
+	// It is still covered by the YARA scan.
 	suspiciousDirs := []string{
 		filepath.Join(root, "pub", "media"),
 		filepath.Join(root, "pub", "static"),
 		filepath.Join(root, "var"),
-		filepath.Join(root, "generated"),
 	}
 
 	recentCutoff := time.Now().Add(-time.Duration(days) * 24 * time.Hour)
