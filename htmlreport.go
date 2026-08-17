@@ -81,6 +81,11 @@ tr:hover { background: #161b22; }
 .plugin-card { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 10px 14px; }
 .plugin-card .name { font-weight: bold; color: #58a6ff; }
 .plugin-card .ver { color: #8b949e; font-size: 0.9em; }
+.threats { background: #3d1117; border: 1px solid #f85149; border-radius: 8px; padding: 20px; margin: 15px 0; }
+.threats h2 { color: #f85149; border-bottom-color: #f85149; margin-top: 0; }
+.threat-item { padding: 6px 0; }
+.threat-item .file { color: #ffa198; font-weight: bold; }
+.threat-item .desc { color: #8b949e; font-size: 0.9em; }
 .timeline-item { display: flex; gap: 12px; padding: 6px 0; border-left: 2px solid #30363d; margin-left: 10px; padding-left: 15px; }
 .timeline-item .ts { color: #8b949e; font-size: 0.85em; min-width: 160px; }
 .footer { text-align: center; color: #484f58; margin-top: 40px; padding: 20px; font-size: 0.85em; }
@@ -112,6 +117,17 @@ tr:hover { background: #161b22; }
 
 	// Risk banner
 	w(`<div class="risk-banner %s">%s</div>`, riskClass, riskLabel)
+
+	// Confirmed threats, above everything else — same rationale as the text report.
+	if threats := collectConfirmedThreats(result); len(threats) > 0 {
+		w(`<div class="threats">`)
+		w(`<h2>⚠ %d CONFIRMED THREAT(S) — immediate action needed</h2>`, len(threats))
+		for _, t := range threats {
+			w(`<div class="threat-item"><div class="file code">%s</div><div class="desc">%s [%s]</div></div>`,
+				html.EscapeString(t.file), html.EscapeString(t.desc), html.EscapeString(t.sig))
+		}
+		w(`</div>`)
+	}
 
 	// Stats
 	w(`<div class="stats">`)
@@ -195,6 +211,7 @@ tr:hover { background: #161b22; }
 	writeHTMLFindingsTable(w, "Recently Modified File Findings", result.MtimeFindings)
 	writeHTMLFindingsTable(w, "Integrity Findings", result.IntegrityFindings)
 	writeHTMLFindingsTable(w, "YARA Findings", result.YaraFindings)
+	writeHTMLFindingsTable(w, "Running Process Findings", result.ProcessFindings)
 	writeHTMLFindingsTable(w, "Access Log Findings", result.LogFindings)
 
 	// Suspicious files

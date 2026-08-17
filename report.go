@@ -182,15 +182,16 @@ func printLogScanHint(result *ScanResult) {
 		Dim, Reset)
 }
 
-// printConfirmedThreats surfaces confirmed-confidence malware at the very top
-// of the report, one line per file, so genuine threats aren't buried under
-// heuristic/factual findings of higher nominal severity.
-func printConfirmedThreats(result *ScanResult) {
-	// One entry per file; keep the first confirmed finding's description.
-	type threat struct {
-		file, sig, desc string
-	}
-	var threats []threat
+// confirmedThreat is one file carrying confirmed-confidence malware.
+type confirmedThreat struct {
+	file, sig, desc string
+}
+
+// collectConfirmedThreats returns one entry per file with a confirmed-confidence
+// finding, keeping the first such finding's description. Shared by the text and
+// HTML reports.
+func collectConfirmedThreats(result *ScanResult) []confirmedThreat {
+	var threats []confirmedThreat
 	seen := make(map[string]bool)
 
 	all := append([]Finding{}, result.Findings...)
@@ -202,9 +203,16 @@ func printConfirmedThreats(result *ScanResult) {
 			continue
 		}
 		seen[f.FilePath] = true
-		threats = append(threats, threat{f.FilePath, f.SignatureID, f.Description})
+		threats = append(threats, confirmedThreat{f.FilePath, f.SignatureID, f.Description})
 	}
+	return threats
+}
 
+// printConfirmedThreats surfaces confirmed-confidence malware at the very top
+// of the report, one line per file, so genuine threats aren't buried under
+// heuristic/factual findings of higher nominal severity.
+func printConfirmedThreats(result *ScanResult) {
+	threats := collectConfirmedThreats(result)
 	if len(threats) == 0 {
 		return
 	}
